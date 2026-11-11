@@ -1,4 +1,5 @@
 'use client';
+import { useData } from '@/lib/use-data';
 import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
@@ -192,6 +193,13 @@ export interface Field {
   step?: string;
   placeholder?: string;
   defaultValue?: string | number;
+  remote?: string;
+}
+function RemoteSelect({field}:{field:Field}) {
+  const [search,setSearch]=useState(''),[value,setValue]=useState('');
+  const {data,loading,error}=useData(`${field.remote}${field.remote!.includes('?')?'&':'?'}search=${encodeURIComponent(search)}&limit=20`);
+  const rows=data?.items||data||[];
+  return <div className="form-grid" style={{gap:8}}><input aria-label={`Find ${field.label.toLowerCase()}`} placeholder="Search by name or student ID…" value={search} onChange={e=>{setSearch(e.target.value);setValue('');}}/><select aria-label={field.label} name={field.key} value={value} required={field.required!==false} onChange={e=>setValue(e.target.value)}><option value="" disabled>{loading?'Searching…':`Select ${field.label.toLowerCase()}`}</option>{rows.map((item:any)=><option key={item.id} value={item.id}>{item.fullName||item.name||item.title}{item.studentCode?` · ${item.studentCode}`:''}</option>)}</select>{error&&<span className="text-muted">{error}</span>}</div>;
 }
 export function FormModal({
   title,
@@ -233,7 +241,7 @@ export function FormModal({
         {fields.map((f) => (
           <label key={f.key}>
             {f.label}
-            {f.options ? (
+            {f.remote ? <RemoteSelect field={f}/> : f.options ? (
               <select
                 aria-label={f.label}
                 name={f.key}

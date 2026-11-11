@@ -30,7 +30,7 @@ export default function Settings() {
           'ACCOUNTS',
           'TEACHER',
           'CLASS_TEACHER',
-          'ADMISSION_OFFICER',
+          'ADMISSION_OFFICER','LIBRARIAN','TRANSPORT_MANAGER',
           'GUARDIAN',
           'STUDENT',
         ].map((r) => ({ value: r, label: r.replaceAll('_', ' ') })),

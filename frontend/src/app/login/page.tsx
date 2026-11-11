@@ -18,8 +18,8 @@ export default function Login() {
     const fd = new FormData(e.currentTarget);
     try {
       localStorage.removeItem('campus-id');
-      await post('auth/login', { email: fd.get('email'), password: fd.get('password') });
-      router.replace('/');
+      const result=await post('auth/login', { email: fd.get('email'), password: fd.get('password') });
+      router.replace(result.platformAdmin?'/platform':'/overview');
     } catch (e) {
       setError((e as Error).message);
     } finally {
