@@ -3,15 +3,19 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "node --env-file-if-exists=../.env --import tsx --watch src/main.ts",
+    "setup": "node setup/setup-env.mjs",
+    "dev": "node --env-file-if-exists=.env --import tsx --watch src/main.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test test/*.test.ts",
     "db:generate": "prisma generate",
-    "db:migrate": "node --env-file-if-exists=../.env ../node_modules/prisma/build/index.js migrate deploy",
-    "db:seed": "node --env-file-if-exists=../.env --import tsx prisma/seed.ts",
-    "test:integration": "node --env-file-if-exists=../.env --import tsx --test test/integration.test.ts"
+    "db:migrate": "node --env-file-if-exists=.env node_modules/prisma/build/index.js migrate deploy",
+    "db:seed": "node --env-file-if-exists=.env --import tsx prisma/seed.ts",
+    "test:integration": "node --env-file-if-exists=.env --import tsx --test test/integration.test.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "verify": "npm run db:generate && npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.9",
@@ -40,6 +44,9 @@
     "@types/pdfkit": "^0.17.3",
     "prisma": "^6.19.0",
     "tsx": "^4.20.6",
-    "typescript": "^5.9.3"
-  }
+    "typescript": "^5.9.3",
+    "prettier": "^3.9.10"
+  },
+  "overrides": { "@prisma/config": { "deepmerge-ts": "8.0.2" } },
+  "engines": { "node": ">=22" }
 }

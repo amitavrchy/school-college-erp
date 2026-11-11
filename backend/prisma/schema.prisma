@@ -1,6 +1,226 @@
 generator client {
   provider = "prisma-client-js"
 }
+model OrganizationMember {
+  id String @id @default(cuid())
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id])
+  userId String
+  user User @relation(fields: [userId], references: [id])
+  role String @default("MEMBER")
+  @@unique([organizationId, userId])
+}
+model SubscriptionPlan {
+  id String @id @default(cuid())
+  code String @unique
+  name String
+  description String
+  monthlyMinor Int
+  annualMinor Int
+  maxCampuses Int
+  maxStudents Int
+  maxStaff Int
+  features String[]
+  active Boolean @default(true)
+  subscriptions Subscription[]
+  payments SubscriptionPayment[]
+}
+model Subscription {
+  id String @id @default(cuid())
+  organizationId String @unique
+  organization Organization @relation(fields: [organizationId], references: [id])
+  planId String
+  plan SubscriptionPlan @relation(fields: [planId], references: [id])
+  status String @default("TRIAL")
+  period String @default("MONTHLY")
+  currentPeriodStart DateTime @default(now())
+  currentPeriodEnd DateTime
+  updatedAt DateTime @updatedAt
+}
+model SubscriptionPayment {
+  id String @id @default(cuid())
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id])
+  planId String
+  plan SubscriptionPlan @relation(fields: [planId], references: [id])
+  period String
+  amountMinor Int
+  method String
+  reference String
+  senderPhone String?
+  status String @default("PENDING")
+  submittedBy String
+  reviewedBy String?
+  reviewNote String?
+  reviewedAt DateTime?
+  createdAt DateTime @default(now())
+  @@unique([method, reference])
+  @@index([organizationId, createdAt])
+}
+model SubscriptionEvent {
+  id String @id @default(cuid())
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id])
+  actorId String
+  action String
+  meta Json?
+  createdAt DateTime @default(now())
+  @@index([organizationId, createdAt])
+}
+model PlatformSettings {
+  id String @id @default("platform")
+  bkashNumber String?
+  nagadNumber String?
+  bankInstructions String?
+  paymentInstructions String @default("Send the exact subscription amount, then submit your transaction reference. The platform team reviews every request before activation.")
+  supportEmail String?
+}
+model LibraryBook {
+  id String @id @default(cuid())
+  campusId String
+  campus Campus @relation(fields: [campusId], references: [id])
+  title String
+  author String
+  isbn String?
+  category String
+  shelf String?
+  totalCopies Int
+  replacementMinor Int @default(0)
+  loans LibraryLoan[]
+  reservations LibraryReservation[]
+  createdAt DateTime @default(now())
+  @@index([campusId, title])
+}
+model LibraryLoan {
+  id String @id @default(cuid())
+  bookId String
+  book LibraryBook @relation(fields: [bookId], references: [id])
+  studentId String
+  student Student @relation(fields: [studentId], references: [id])
+  issuedBy String
+  issuedAt DateTime @default(now())
+  dueDate DateTime @db.Date
+  returnedAt DateTime?
+  status String @default("BORROWED")
+  fineMinor Int @default(0)
+  @@index([studentId, status])
+}
+model LibraryReservation {
+  id String @id @default(cuid())
+  bookId String
+  book LibraryBook @relation(fields: [bookId], references: [id])
+  studentId String
+  student Student @relation(fields: [studentId], references: [id])
+  status String @default("WAITING")
+  createdAt DateTime @default(now())
+  @@unique([bookId, studentId])
+}
+model TransportRoute {
+  id String @id @default(cuid())
+  campusId String
+  campus Campus @relation(fields: [campusId], references: [id])
+  name String
+  vehicleNumber String
+  driverName String
+  driverPhone String
+  capacity Int
+  monthlyMinor Int
+  active Boolean @default(true)
+  stops TransportStop[]
+  assignments StudentTransport[]
+}
+model TransportStop {
+  id String @id @default(cuid())
+  routeId String
+  route TransportRoute @relation(fields: [routeId], references: [id])
+  name String
+  pickupTime String
+  dropTime String
+  sequence Int
+  assignments StudentTransport[]
+  @@unique([routeId, sequence])
+}
+model StudentTransport {
+  id String @id @default(cuid())
+  studentId String
+  student Student @relation(fields: [studentId], references: [id])
+  routeId String
+  route TransportRoute @relation(fields: [routeId], references: [id])
+  stopId String
+  stop TransportStop @relation(fields: [stopId], references: [id])
+  sessionId String
+  session AcademicSession @relation(fields: [sessionId], references: [id])
+  active Boolean @default(true)
+  trips TransportTrip[]
+  @@unique([studentId, sessionId])
+}
+model TransportTrip {
+  id String @id @default(cuid())
+  assignmentId String
+  assignment StudentTransport @relation(fields: [assignmentId], references: [id])
+  date DateTime @db.Date
+  journey String
+  status String
+  markedBy String
+  updatedAt DateTime @updatedAt
+  @@unique([assignmentId, date, journey])
+}
+model Homework {
+  id String @id @default(cuid())
+  sectionId String
+  section Section @relation(fields: [sectionId], references: [id])
+  subjectId String
+  subject Subject @relation(fields: [subjectId], references: [id])
+  teacherId String
+  title String
+  instructions String
+  dueAt DateTime
+  maxPoints Int @default(100)
+  allowLate Boolean @default(false)
+  published Boolean @default(true)
+  submissions HomeworkSubmission[]
+  createdAt DateTime @default(now())
+}
+model HomeworkSubmission {
+  id String @id @default(cuid())
+  homeworkId String
+  homework Homework @relation(fields: [homeworkId], references: [id])
+  studentId String
+  student Student @relation(fields: [studentId], references: [id])
+  answer String
+  submittedAt DateTime @default(now())
+  points Int?
+  feedback String?
+  gradedBy String?
+  @@unique([homeworkId, studentId])
+}
+model SupportTicket {
+  id String @id @default(cuid())
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id])
+  campusId String
+  createdById String
+  createdBy User @relation(fields: [createdById], references: [id])
+  assignedToId String?
+  title String
+  category String
+  priority String @default("NORMAL")
+  status String @default("OPEN")
+  slaDueAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  comments TicketComment[]
+  @@index([organizationId, campusId, status])
+}
+model TicketComment {
+  id String @id @default(cuid())
+  ticketId String
+  ticket SupportTicket @relation(fields: [ticketId], references: [id])
+  authorId String
+  author User @relation(fields: [authorId], references: [id])
+  body String
+  createdAt DateTime @default(now())
+}
 datasource db {
   provider = "postgresql"
   url = env("DATABASE_URL")
@@ -9,6 +229,16 @@ model Organization {
   id String @id @default(cuid())
   name String
   campuses Campus[]
+  slug String? @unique
+  status String @default("ACTIVE")
+  supportEmail String?
+  accentColor String @default("#22644f")
+  createdAt DateTime @default(now())
+  members OrganizationMember[]
+  subscription Subscription?
+  subscriptionPayments SubscriptionPayment[]
+  subscriptionEvents SubscriptionEvent[]
+  tickets SupportTicket[]
 }
 model Campus {
   id String @id @default(cuid())
@@ -26,6 +256,8 @@ model Campus {
   grades GradeScale[]
   notices Notice[]
   holidays Holiday[]
+  books LibraryBook[]
+  transportRoutes TransportRoute[]
   @@unique([orgId, code])
 }
 model AcademicSession {
@@ -42,6 +274,7 @@ model AcademicSession {
   terms ExamTerm[]
   structures FeeStructure[]
   invoices Invoice[]
+  transportAssignments StudentTransport[]
   @@unique([campusId, name])
 }
 model User {
@@ -53,6 +286,10 @@ model User {
   passwordHash String
   active Boolean @default(true)
   tokenVersion Int @default(0)
+  platformAdmin Boolean @default(false)
+  memberships OrganizationMember[]
+  tickets SupportTicket[]
+  ticketComments TicketComment[]
   roles UserCampusRole[]
   guardians GuardianStudent[]
   student Student?
@@ -94,6 +331,10 @@ model Student {
   payments Payment[]
   leaves LeaveRequest[]
   waivers Waiver[]
+  libraryLoans LibraryLoan[]
+  libraryReservations LibraryReservation[]
+  transportAssignments StudentTransport[]
+  homeworkSubmissions HomeworkSubmission[]
   @@unique([campusId, studentCode])
 }
 model SchoolClass {
@@ -121,6 +362,7 @@ model Section {
   assignments SectionSubjectTeacher[]
   offers SeatOffer[]
   slots TimetableSlot[]
+  homework Homework[]
   @@unique([classId, sessionId, name])
 }
 model Enrollment {
@@ -148,6 +390,7 @@ model Subject {
   assignments SectionSubjectTeacher[]
   marks ExamMark[]
   slots TimetableSlot[]
+  homework Homework[]
   @@unique([campusId, code])
 }
 model SectionSubjectTeacher {
