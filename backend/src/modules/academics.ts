@@ -7,6 +7,8 @@ import { id, parse } from '../common';
 @Controller()
 export class AcademicsController {
   constructor(@Inject(Db) private db: Db, @Inject(Scope) private scope: Scope) {}
+  @Get('teachers') @Roles(...ACADEMIC,'TEACHER','CLASS_TEACHER')
+  teachers(@Actor() c: Context) { return this.db.user.findMany({ where: { roles: { some: { campusId: c.campusId, role: { in: ['TEACHER','CLASS_TEACHER'] } } } }, select: { id: true, fullName: true } }); }
   @Get('classes')
   classes(@Actor() c: Context) { return this.db.schoolClass.findMany({ where: { campusId: c.campusId }, orderBy: { numericLevel: 'asc' } }); }
   @Post('classes') @Roles(...ADMIN)
