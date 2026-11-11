@@ -6,6 +6,7 @@ import { useCampus } from '@/components/shell';
 import { Badge, Button, FormModal, PageTitle, Panel, State, Toast } from '@/components/ui';
 import { useData } from '@/lib/use-data';
 import { displayDate, pdfDownload, post } from '@/lib/api';
+import { TransferModal } from '@/components/transfer-modal';
 export default function StudentDetail() {
   const { id } = useParams(),
     { can } = useCampus();
@@ -13,6 +14,7 @@ export default function StudentDetail() {
   const manage = can('SUPER_ADMIN', 'CAMPUS_ADMIN', 'PRINCIPAL');
   const { data: users } = useData(can('SUPER_ADMIN', 'CAMPUS_ADMIN') ? 'users' : null);
   const [link, setLink] = useState(false),
+    [transfer, setTransfer] = useState(false),
     [toast, setToast] = useState('');
   if (!s) return <State loading={loading} error={error} onRetry={reload} />;
   return (
@@ -35,6 +37,11 @@ export default function StudentDetail() {
           <Download size={16} />
           Report card
         </Button>
+        {manage && s.enrollments.some((e: any) => e.status === 'ACTIVE') && (
+          <Button variant="secondary" onClick={() => setTransfer(true)}>
+            Transfer campus
+          </Button>
+        )}
       </PageTitle>
       <div className="grid-two">
         <Panel>
@@ -154,6 +161,16 @@ export default function StudentDetail() {
             await post(`students/${id}/guardians`, { ...v, isPrimary: s.guardians.length === 0 });
             await reload();
             setToast('Guardian linked');
+          }}
+        />
+      )}
+      {transfer && (
+        <TransferModal
+          student={s}
+          onClose={() => setTransfer(false)}
+          onSaved={() => {
+            void reload();
+            setToast('Campus transfer completed');
           }}
         />
       )}

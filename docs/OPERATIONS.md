@@ -32,4 +32,4 @@ Back up PostgreSQL, test restores and preserve Redis append-only persistence. Re
 
 ## Advanced boundaries
 
-Library/transport, direct wallets, vendor biometric drivers, S3, gateway delivery callbacks, configurable admission quota policies, asynchronous/cached PDFs, fee-cap settings UI, refunds and bank reconciliation need additional implementation. Transfer is exposed by the API; the UI currently emphasizes admission and promotion. These integrations are not represented as live.
+Library/transport, direct wallets, vendor biometric drivers, S3, gateway delivery callbacks, configurable admission quota policies, asynchronous/cached PDFs, fee-cap settings UI, refunds and bank reconciliation need additional implementation. Transfer is available from the student profile: it preserves the original record, links the family at the destination, and prorates monthly fees. Promotion lets staff hold selected learners and choose a later session without entering record IDs. These external integrations are not represented as live.

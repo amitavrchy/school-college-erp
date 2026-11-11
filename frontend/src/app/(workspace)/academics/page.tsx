@@ -5,6 +5,7 @@ import { useCampus } from '@/components/shell';
 import { Badge, Button, Field, FormModal, PageTitle, Panel, State, Toast } from '@/components/ui';
 import { useData } from '@/lib/use-data';
 import { post } from '@/lib/api';
+import { PromotionModal } from '@/components/promotion-modal';
 export default function Academics() {
   const { can, sessionId } = useCampus();
   const manage = can('SUPER_ADMIN', 'CAMPUS_ADMIN', 'PRINCIPAL'),
@@ -25,9 +26,6 @@ export default function Academics() {
   const selected = sections?.find((s: any) => s.id === sectionId) || sections?.[0];
   const { data: slots, reload: reloadSlots } = useData(
     selected ? `timetable?sectionId=${selected.id}` : null,
-  );
-  const { data: roster } = useData(
-    modal === 'promote' && selected ? `students?sectionId=${selected.id}&limit=200` : null,
   );
   const sectionOptions =
       sections?.map((s: any) => ({ value: s.id, label: `${s.schoolClass.name} · ${s.name}` })) ||
@@ -86,48 +84,24 @@ export default function Academics() {
       { key: 'period', label: 'Period', type: 'number', min: 1, max: 12 },
       { key: 'room', label: 'Room' },
     ],
-    promote: [
-      {
-        key: 'targetSectionId',
-        label: 'Target section (new session)',
-        placeholder: 'Section ID from the target academic session',
-      },
-      {
-        key: 'carryDues',
-        label: 'Unpaid dues policy',
-        options: [
-          { value: 'false', label: 'Block if unpaid dues exist' },
-          { value: 'true', label: 'Carry dues to the next session' },
-        ],
-      },
-    ],
   };
   async function submit(v: Record<string, any>) {
-    if (modal === 'promote') {
-      await post('lifecycle/promote', {
-        ...v,
-        carryDues: v.carryDues === 'true',
-        enrollmentIds: roster?.items.flatMap((s: any) =>
-          s.enrollments.filter((e: any) => e.sectionId === selected.id).map((e: any) => e.id),
-        ),
-      });
-    } else
-      await post(
-        (
-          {
-            section: 'sections',
-            class: 'classes',
-            subject: 'subjects',
-            assignment: 'assignments',
-            slot: 'timetable',
-          } as any
-        )[modal],
+    await post(
+      (
         {
-          ...v,
-          ...(modal === 'section' ? { sessionId } : {}),
-          ...(modal === 'slot' ? { sectionId: selected.id, dayOfWeek: Number(v.dayOfWeek) } : {}),
-        },
-      );
+          section: 'sections',
+          class: 'classes',
+          subject: 'subjects',
+          assignment: 'assignments',
+          slot: 'timetable',
+        } as any
+      )[modal],
+      {
+        ...v,
+        ...(modal === 'section' ? { sessionId } : {}),
+        ...(modal === 'slot' ? { sectionId: selected.id, dayOfWeek: Number(v.dayOfWeek) } : {}),
+      },
+    );
     await Promise.all([reload(), reloadClasses(), reloadSubjects(), reloadSlots()]);
     setToast('Academic records updated');
   }
@@ -312,7 +286,17 @@ export default function Academics() {
           </Panel>
         </div>
       )}
-      {modal && (
+      {modal === 'promote' && selected && (
+        <PromotionModal
+          source={selected}
+          onClose={() => setModal('')}
+          onSaved={() => {
+            void reload();
+            setToast('Selected students promoted');
+          }}
+        />
+      )}
+      {modal && modal !== 'promote' && (
         <FormModal
           title={
             (

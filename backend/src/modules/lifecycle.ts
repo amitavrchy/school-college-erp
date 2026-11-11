@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { Db } from '../db';
 import { Actor, Context, Roles, ACADEMIC } from '../auth/access';
 import { Scope } from '../auth/scope';
-import { id, parse } from '../common';
+import { id, parse, today } from '../common';
 import { outstanding } from '../domain/fees';
 @Controller('lifecycle')
 @Roles(...ACADEMIC)
@@ -39,7 +39,7 @@ export class LifecycleController {
           student: { campusId: c.campusId },
           session: { status: { not: 'CLOSED' } },
         },
-        include: { section: { include: { schoolClass: true } } },
+        include: { section: { include: { schoolClass: true } }, session: true },
       });
       if (enrollments.length !== new Set(v.enrollmentIds).size)
         throw new BadRequestException(
@@ -54,6 +54,7 @@ export class LifecycleController {
       for (const e of enrollments) {
         if (
           e.sessionId === target.sessionId ||
+          target.session.startsOn <= e.session.startsOn ||
           e.section.schoolClass.numericLevel + 1 !== targetClass.numericLevel
         )
           throw new BadRequestException('Promotion must advance one class into a new session');
@@ -121,7 +122,11 @@ export class LifecycleController {
         student: { campusId: c.campusId },
         session: { status: { not: 'CLOSED' } },
       },
-      include: { student: { include: { guardians: true } }, session: true },
+      include: {
+        student: { include: { guardians: true } },
+        session: true,
+        section: { include: { schoolClass: true } },
+      },
     });
     const target = await this.db.section.findUniqueOrThrow({
       where: { id: v.targetSectionId },
@@ -145,11 +150,18 @@ export class LifecycleController {
       );
     if (
       target.session.status === 'CLOSED' ||
+      v.effectiveDate.toISOString().slice(0, 10) > today() ||
+      v.effectiveDate < source.session.startsOn ||
+      target.schoolClass.numericLevel !== source.section.schoolClass.numericLevel ||
       v.effectiveDate < target.session.startsOn ||
       v.effectiveDate > target.session.endsOn
     )
       throw new BadRequestException('Invalid transfer session or effective date');
     return this.db.serial(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Enrollment" WHERE id = ${source.id} FOR UPDATE`;
+      await tx.enrollment.findFirstOrThrow({
+        where: { id: source.id, status: 'ACTIVE', session: { status: { not: 'CLOSED' } } },
+      });
       await tx.$queryRaw`SELECT id FROM "Section" WHERE id = ${target.id} FOR UPDATE`;
       if (
         (await tx.enrollment.count({ where: { sectionId: target.id, status: 'ACTIVE' } })) >=
@@ -191,19 +203,89 @@ export class LifecycleController {
           update: {},
         });
       }
+      if (source.student.userId) {
+        await tx.guardianStudent.create({
+          data: {
+            guardianUserId: source.student.userId,
+            studentId: student.id,
+            relation: 'Self',
+            isPrimary: false,
+          },
+        });
+        await tx.userCampusRole.upsert({
+          where: {
+            userId_campusId_role: {
+              userId: source.student.userId,
+              campusId: student.campusId,
+              role: 'STUDENT',
+            },
+          },
+          create: { userId: source.student.userId, campusId: student.campusId, role: 'STUDENT' },
+          update: {},
+        });
+      }
+      const monthStart = new Date(
+        Date.UTC(v.effectiveDate.getUTCFullYear(), v.effectiveDate.getUTCMonth(), 1),
+      );
+      const nextMonth = new Date(
+        Date.UTC(v.effectiveDate.getUTCFullYear(), v.effectiveDate.getUTCMonth() + 1, 1),
+      );
+      const days = Math.round((nextMonth.getTime() - monthStart.getTime()) / 86400000);
+      const remainingDays = Math.round(
+        (nextMonth.getTime() - v.effectiveDate.getTime()) / 86400000,
+      );
       const sourceInvoices = await tx.invoice.findMany({
         where: {
           studentId: source.studentId,
           sessionId: source.sessionId,
           status: { in: ['DUE', 'PARTIAL'] },
-          dueDate: { gt: v.effectiveDate },
+          dueDate: { gte: monthStart },
+        },
+        include: { lines: true },
+      });
+      const monthlyHeads = await tx.feeHead.findMany({
+        where: {
+          frequency: 'MONTHLY',
+          structure: { classId: source.section.classId, sessionId: source.sessionId },
         },
       });
-      for (const i of sourceInvoices)
+      for (const i of sourceInvoices) {
+        const monthlyTotal = i.lines
+          .filter((l) => monthlyHeads.some((h) => h.name === l.feeHeadName))
+          .reduce((sum, l) => sum + l.amountMinor, 0);
+        const reduction =
+          i.dueDate >= nextMonth
+            ? outstanding(i)
+            : Math.min(outstanding(i), Math.floor((monthlyTotal * remainingDays) / days));
         await tx.invoice.update({
           where: { id: i.id },
-          data: { status: 'CANCELLED', waivedMinor: i.waivedMinor + outstanding(i) },
+          data: {
+            status: reduction === outstanding(i) ? 'CANCELLED' : i.status,
+            waivedMinor: i.waivedMinor + reduction,
+          },
         });
+      }
+      const structures = await tx.feeStructure.findMany({
+        where: { classId: target.classId, sessionId: target.sessionId },
+        include: { heads: { where: { frequency: 'MONTHLY' } } },
+      });
+      for (const structure of structures) {
+        const lines = structure.heads.map((h) => ({
+          feeHeadName: `${h.name} (prorated transfer)`,
+          amountMinor: Math.ceil((h.amountMinor * remainingDays) / days),
+        }));
+        if (lines.length)
+          await tx.invoice.create({
+            data: {
+              studentId: student.id,
+              sessionId: target.sessionId,
+              dueDate: v.effectiveDate,
+              totalMinor: lines.reduce((s, l) => s + l.amountMinor, 0),
+              generationKey: `${structure.id}-${student.id}-${v.effectiveDate.toISOString().slice(0, 7)}`,
+              lines: { create: lines },
+            },
+          });
+      }
       await tx.enrollment.update({ where: { id: source.id }, data: { status: 'TRANSFERRED' } });
       await tx.auditLog.create({
         data: {
