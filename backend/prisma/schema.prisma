@@ -1,0 +1,376 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+model Organization {
+  id String @id @default(cuid())
+  name String
+  campuses Campus[]
+}
+model Campus {
+  id String @id @default(cuid())
+  orgId String
+  organization Organization @relation(fields: [orgId], references: [id])
+  name String
+  code String
+  address String?
+  timezone String @default("Asia/Dhaka")
+  sessions AcademicSession[]
+  roles UserCampusRole[]
+  students Student[]
+  classes SchoolClass[]
+  subjects Subject[]
+  grades GradeScale[]
+  notices Notice[]
+  holidays Holiday[]
+  @@unique([orgId, code])
+}
+model AcademicSession {
+  id String @id @default(cuid())
+  campusId String
+  campus Campus @relation(fields: [campusId], references: [id])
+  name String
+  startsOn DateTime @db.Date
+  endsOn DateTime @db.Date
+  status String @default("PLANNED")
+  sections Section[]
+  enrollments Enrollment[]
+  applications AdmissionApplication[]
+  terms ExamTerm[]
+  structures FeeStructure[]
+  invoices Invoice[]
+  @@unique([campusId, name])
+}
+model User {
+  id String @id @default(cuid())
+  email String @unique
+  phone String?
+  fullName String
+  fullNameBn String?
+  passwordHash String
+  active Boolean @default(true)
+  tokenVersion Int @default(0)
+  roles UserCampusRole[]
+  guardians GuardianStudent[]
+  student Student?
+  assignments SectionSubjectTeacher[]
+}
+model UserCampusRole {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id])
+  campusId String
+  campus Campus @relation(fields: [campusId], references: [id])
+  role String
+  @@unique([userId, campusId, role])
+}
+model GuardianStudent {
+  guardianUserId String
+  guardian User @relation(fields: [guardianUserId], references: [id])
+  studentId String
+  student Student @relation(fields: [studentId], references: [id])
+  relation String @default("Parent")
+  isPrimary Boolean @default(false)
+  @@id([guardianUserId, studentId])
+}
+model Student {
+  id String @id @default(cuid())
+  campusId String
+  campus Campus @relation(fields: [campusId], references: [id])
+  userId String? @unique
+  user User? @relation(fields: [userId], references: [id])
+  studentCode String
+  fullName String
+  fullNameBn String?
+  dob DateTime? @db.Date
+  gender String?
+  bloodGroup String?
+  guardians GuardianStudent[]
+  enrollments Enrollment[]
+  invoices Invoice[]
+  payments Payment[]
+  leaves LeaveRequest[]
+  waivers Waiver[]
+  @@unique([campusId, studentCode])
+}
+model SchoolClass {
+  id String @id @default(cuid())
+  campusId String
+  campus Campus @relation(fields: [campusId], references: [id])
+  name String
+  numericLevel Int
+  sections Section[]
+  structures FeeStructure[]
+  applications AdmissionApplication[]
+  @@unique([campusId, numericLevel])
+}
+model Section {
+  id String @id @default(cuid())
+  classId String
+  schoolClass SchoolClass @relation(fields: [classId], references: [id])
+  sessionId String
+  session AcademicSession @relation(fields: [sessionId], references: [id])
+  name String
+  capacity Int @default(40)
+  shift String @default("MORNING")
+  classTeacherId String?
+  enrollments Enrollment[]
+  assignments SectionSubjectTeacher[]
+  offers SeatOffer[]
+  slots TimetableSlot[]
+  @@unique([classId, sessionId, name])
+}
+model Enrollment {
+  id String @id @default(cuid())
+  studentId String
+  student Student @relation(fields: [studentId], references: [id])
+  sectionId String
+  section Section @relation(fields: [sectionId], references: [id])
+  sessionId String
+  session AcademicSession @relation(fields: [sessionId], references: [id])
+  status String @default("ACTIVE")
+  rollNumber String?
+  attendance AttendanceRecord[]
+  marks ExamMark[]
+  @@unique([studentId, sessionId])
+  @@index([sectionId])
+}
+model Subject {
+  id String @id @default(cuid())
+  campusId String
+  campus Campus @relation(fields: [campusId], references: [id])
+  name String
+  code String
+  compulsory Boolean @default(true)
+  assignments SectionSubjectTeacher[]
+  marks ExamMark[]
+  slots TimetableSlot[]
+  @@unique([campusId, code])
+}
+model SectionSubjectTeacher {
+  id String @id @default(cuid())
+  sectionId String
+  section Section @relation(fields: [sectionId], references: [id])
+  subjectId String
+  subject Subject @relation(fields: [subjectId], references: [id])
+  teacherId String
+  teacher User @relation(fields: [teacherId], references: [id])
+  @@unique([sectionId, subjectId])
+}
+model AdmissionApplication {
+  id String @id @default(cuid())
+  sessionId String
+  session AcademicSession @relation(fields: [sessionId], references: [id])
+  applyingClassId String
+  applyingClass SchoolClass @relation(fields: [applyingClassId], references: [id])
+  status String @default("SUBMITTED")
+  applicantName String
+  guardianPhone String
+  guardianEmail String?
+  testScore Float @default(0)
+  previousGpa Float @default(0)
+  meritRank Int?
+  offerExpiresAt DateTime?
+  createdAt DateTime @default(now())
+  offer SeatOffer?
+}
+model SeatOffer {
+  id String @id @default(cuid())
+  applicationId String @unique
+  application AdmissionApplication @relation(fields: [applicationId], references: [id])
+  sectionId String
+  section Section @relation(fields: [sectionId], references: [id])
+  status String @default("OFFERED")
+  acceptanceToken String @unique @default(uuid())
+}
+model AttendanceRecord {
+  id String @id @default(cuid())
+  enrollmentId String
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id])
+  date DateTime @db.Date
+  status String
+  period Int @default(0)
+  markedBy String
+  @@unique([enrollmentId, date, period])
+  @@index([date, status])
+}
+model LeaveRequest {
+  id String @id @default(cuid())
+  studentId String
+  student Student @relation(fields: [studentId], references: [id])
+  fromDate DateTime @db.Date
+  toDate DateTime @db.Date
+  status String @default("REQUESTED")
+  reason String
+}
+model ExamTerm {
+  id String @id @default(cuid())
+  sessionId String
+  session AcademicSession @relation(fields: [sessionId], references: [id])
+  name String
+  status String @default("SETUP")
+  weightBps Int @default(10000)
+  entryDeadline DateTime?
+  marks ExamMark[]
+}
+model ExamMark {
+  id String @id @default(cuid())
+  termId String
+  term ExamTerm @relation(fields: [termId], references: [id])
+  enrollmentId String
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id])
+  subjectId String
+  subject Subject @relation(fields: [subjectId], references: [id])
+  marksObtained Decimal @db.Decimal(6,2)
+  maxMarks Decimal @default(100) @db.Decimal(6,2)
+  isAbsent Boolean @default(false)
+  @@unique([termId, enrollmentId, subjectId])
+}
+model GradeScale {
+  id String @id @default(cuid())
+  campusId String
+  campus Campus @relation(fields: [campusId], references: [id])
+  minMarks Float
+  maxMarks Float
+  letter String
+  point Float
+}
+model FeeStructure {
+  id String @id @default(cuid())
+  sessionId String
+  session AcademicSession @relation(fields: [sessionId], references: [id])
+  classId String
+  schoolClass SchoolClass @relation(fields: [classId], references: [id])
+  name String
+  heads FeeHead[]
+}
+model FeeHead {
+  id String @id @default(cuid())
+  structureId String
+  structure FeeStructure @relation(fields: [structureId], references: [id])
+  name String
+  amountMinor Int
+  frequency String @default("MONTHLY")
+}
+model Invoice {
+  id String @id @default(cuid())
+  studentId String
+  student Student @relation(fields: [studentId], references: [id])
+  sessionId String
+  session AcademicSession @relation(fields: [sessionId], references: [id])
+  status String @default("DUE")
+  dueDate DateTime @db.Date
+  totalMinor Int
+  paidMinor Int @default(0)
+  fineMinor Int @default(0)
+  waivedMinor Int @default(0)
+  currency String @default("BDT")
+  generationKey String? @unique
+  lines InvoiceLine[]
+  allocations PaymentAllocation[]
+  waivers Waiver[]
+  @@index([studentId, status])
+}
+model InvoiceLine {
+  id String @id @default(cuid())
+  invoiceId String
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+  feeHeadName String
+  amountMinor Int
+}
+model Payment {
+  id String @id @default(cuid())
+  studentId String
+  student Student @relation(fields: [studentId], references: [id])
+  provider String
+  status String @default("PENDING")
+  amountMinor Int
+  idempotencyKey String @unique
+  providerRef String? @unique
+  paidAt DateTime?
+  createdAt DateTime @default(now())
+  allocations PaymentAllocation[]
+}
+model PaymentAllocation {
+  id String @id @default(cuid())
+  paymentId String
+  payment Payment @relation(fields: [paymentId], references: [id])
+  invoiceId String
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+  amountMinor Int
+  @@unique([paymentId, invoiceId])
+}
+model Waiver {
+  id String @id @default(cuid())
+  studentId String
+  student Student @relation(fields: [studentId], references: [id])
+  invoiceId String
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+  feeHeadName String
+  amountMinor Int
+  reason String
+  requestedBy String
+  approvedBy String?
+  status String @default("REQUESTED")
+}
+model Notice {
+  id String @id @default(cuid())
+  campusId String
+  campus Campus @relation(fields: [campusId], references: [id])
+  title String
+  body String
+  bodyBn String?
+  audience Json
+  channels String[]
+  status String @default("DRAFT")
+  scheduledAt DateTime?
+  createdAt DateTime @default(now())
+  messages SmsMessage[]
+}
+model SmsMessage {
+  id String @id @default(cuid())
+  campusId String
+  toPhone String
+  body String
+  status String @default("QUEUED")
+  providerRef String?
+  dedupeKey String @unique
+  noticeId String?
+  notice Notice? @relation(fields: [noticeId], references: [id])
+  createdAt DateTime @default(now())
+}
+model TimetableSlot {
+  id String @id @default(cuid())
+  sectionId String
+  section Section @relation(fields: [sectionId], references: [id])
+  dayOfWeek Int
+  period Int
+  subjectId String
+  subject Subject @relation(fields: [subjectId], references: [id])
+  teacherId String
+  room String?
+  @@unique([sectionId, dayOfWeek, period])
+  @@unique([teacherId, dayOfWeek, period])
+}
+model Holiday {
+  id String @id @default(cuid())
+  campusId String
+  campus Campus @relation(fields: [campusId], references: [id])
+  name String
+  date DateTime @db.Date
+  @@unique([campusId, date])
+}
+model AuditLog {
+  id String @id @default(cuid())
+  actorId String?
+  campusId String?
+  action String
+  entity String
+  entityId String?
+  meta Json?
+  createdAt DateTime @default(now())
+  @@index([campusId, createdAt])
+}
