@@ -17,7 +17,7 @@ export class AuthController {
     const valid = await compare(value.password, user?.passwordHash || '$2b$12$F1bm6P9VN1H9nQJ0J1utbu6s4H.eOVxw0QRqAwEL3qpIrR/5FyiX2');
     if (!user?.active || !valid) throw new UnauthorizedException('Email or password is incorrect');
     const token = await this.jwt.signAsync({ sub: user.id, v: user.tokenVersion });
-    res.cookie('campus_session', token, { httpOnly: true, secure: config.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 8 * 3600_000 });
+    res.cookie('campus_session', token, { httpOnly: true, secure: process.env.COOKIE_SECURE === 'true' || (config.NODE_ENV === 'production' && process.env.COOKIE_SECURE !== 'false'), sameSite: 'lax', path: '/', maxAge: 8 * 3600_000 });
     return { id: user.id, fullName: user.fullName };
   }
   @Get('me')
