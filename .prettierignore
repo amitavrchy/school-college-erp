@@ -1,0 +1,13 @@
+node_modules
+**/node_modules
+**/.next
+**/dist
+package-lock.json
+backend/prisma/migrations
+Project_spec.md
+frontend/AGENTS.md
+frontend/next-env.d.ts
+test-results
+playwright-report
+.env
+artifacts
