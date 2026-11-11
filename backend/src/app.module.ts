@@ -24,9 +24,43 @@ import { NoticesController } from './modules/notices';
 import { ReportsController } from './modules/reports';
 import { LifecycleController } from './modules/lifecycle';
 import { Billing } from './modules/billing';
+import { UploadsController } from './modules/uploads';
 @Module({
-  imports: [JwtModule.register({ global: true, secret: config.JWT_ACCESS_SECRET, signOptions: { expiresIn: '8h', issuer: 'campus-one', audience: 'campus-one' }, verifyOptions: { issuer: 'campus-one', audience: 'campus-one' } })],
-  controllers: [AuthController, CampusesController, AcademicsController, StudentsController, UsersController, AdmissionsController, AttendanceController, FeesController, PaymentsController, ExamsController, DocumentsController, NoticesController, ReportsController, LifecycleController],
-  providers: [Db, Audit, Scope, Realtime, Jobs, Billing, PaymentService, ExamsController, { provide: APP_GUARD, useClass: AccessGuard }],
+  imports: [
+    JwtModule.register({
+      global: true,
+      secret: config.JWT_ACCESS_SECRET,
+      signOptions: { expiresIn: '8h', issuer: 'campus-one', audience: 'campus-one' },
+      verifyOptions: { issuer: 'campus-one', audience: 'campus-one' },
+    }),
+  ],
+  controllers: [
+    AuthController,
+    CampusesController,
+    AcademicsController,
+    StudentsController,
+    UsersController,
+    AdmissionsController,
+    AttendanceController,
+    FeesController,
+    PaymentsController,
+    ExamsController,
+    DocumentsController,
+    NoticesController,
+    ReportsController,
+    LifecycleController,
+    UploadsController,
+  ],
+  providers: [
+    Db,
+    Audit,
+    Scope,
+    Realtime,
+    Jobs,
+    Billing,
+    PaymentService,
+    ExamsController,
+    { provide: APP_GUARD, useClass: AccessGuard },
+  ],
 })
 export class AppModule {}

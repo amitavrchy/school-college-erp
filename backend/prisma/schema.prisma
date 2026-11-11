@@ -176,6 +176,18 @@ model AdmissionApplication {
   offerExpiresAt DateTime?
   createdAt DateTime @default(now())
   offer SeatOffer?
+  documents AdmissionDocument[]
+}
+model AdmissionDocument {
+  id String @id @default(cuid())
+  applicationId String
+  application AdmissionApplication @relation(fields: [applicationId], references: [id])
+  fileName String
+  mimeType String
+  size Int
+  encryptedData Bytes
+  createdAt DateTime @default(now())
+  @@index([applicationId])
 }
 model SeatOffer {
   id String @id @default(cuid())
