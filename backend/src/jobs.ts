@@ -57,11 +57,11 @@ export class Jobs implements OnModuleInit, OnModuleDestroy {
     );
   }
   async sms(campusId: string, toPhone: string, body: string, dedupeKey: string, noticeId?: string) {
-    const message = await this.db.smsMessage.upsert({
-      where: { dedupeKey },
-      create: { campusId, toPhone, body, dedupeKey, noticeId },
-      update: {},
+    await this.db.smsMessage.createMany({
+      data: { campusId, toPhone, body, dedupeKey, noticeId },
+      skipDuplicates: true,
     });
+    const message = await this.db.smsMessage.findUniqueOrThrow({ where: { dedupeKey } });
     if (['QUEUED', 'FAILED'].includes(message.status))
       await this.queue.add('sms', { id: message.id }, { jobId: `sms-${message.id}` });
   }

@@ -55,7 +55,7 @@ export class Billing {
       const generationKey = `${structure.id}-${e.studentId}-${dueDate.toISOString().slice(0, 7)}`;
       await this.db.invoice.upsert({
         where: { generationKey },
-        update: {},
+        update: { generationKey },
         create: {
           generationKey,
           studentId: e.studentId,
