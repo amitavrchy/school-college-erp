@@ -79,15 +79,20 @@ export class UploadsController {
     const nonce = randomBytes(12),
       cipher = createCipheriv('aes-256-gcm', this.key(), nonce);
     const encrypted = Buffer.concat([cipher.update(bytes), cipher.final()]);
-    const document = await this.db.admissionDocument.create({
-      data: {
-        applicationId,
-        fileName: v.fileName.replace(/[^a-zA-Z0-9._ -]/g, '_'),
-        mimeType: v.mimeType,
-        size: bytes.length,
-        encryptedData: Buffer.concat([nonce, cipher.getAuthTag(), encrypted]),
-      },
-      select: { id: true, fileName: true, size: true },
+    const document = await this.db.serial(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "AdmissionApplication" WHERE id = ${applicationId} FOR UPDATE`;
+      if ((await tx.admissionDocument.count({ where: { applicationId } })) >= 5)
+        throw new BadRequestException('Maximum five documents per application');
+      return tx.admissionDocument.create({
+        data: {
+          applicationId,
+          fileName: v.fileName.replace(/[^a-zA-Z0-9._ -]/g, '_'),
+          mimeType: v.mimeType,
+          size: bytes.length,
+          encryptedData: Buffer.concat([nonce, cipher.getAuthTag(), encrypted]),
+        },
+        select: { id: true, fileName: true, size: true },
+      });
     });
     return document;
   }

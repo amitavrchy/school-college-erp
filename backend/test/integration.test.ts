@@ -155,6 +155,8 @@ test(
       await db.section.deleteMany({ where: { sessionId: { in: ss } } });
       await db.subject.deleteMany({ where: { campusId: { in: campusIds } } });
       await db.schoolClass.deleteMany({ where: { campusId: { in: campusIds } } });
+      await db.feeHead.deleteMany({ where: { structure: { sessionId: { in: ss } } } });
+      await db.feeStructure.deleteMany({ where: { sessionId: { in: ss } } });
       await db.academicSession.deleteMany({ where: { id: { in: ss } } });
       await db.userCampusRole.deleteMany({ where: { campusId: { in: campusIds } } });
       await db.auditLog.deleteMany({ where: { campusId: { in: campusIds } } });
@@ -280,10 +282,11 @@ test(
     });
     await t.test(
       'absence alerts deduplicate by student and date and respect approved leave',
-      async () => {
+      async (scenario) => {
         const { Jobs } = await import('../src/jobs');
         const { Billing } = await import('../src/modules/billing');
         const jobs = new Jobs(db as any, { user() {}, campus() {} } as any, new Billing(db as any));
+        scenario.after(() => jobs.onModuleDestroy());
         const enrollmentId = students[0].enrollments[0].id;
         await db.attendanceRecord.create({
           data: {
@@ -318,7 +321,6 @@ test(
             break;
           await new Promise((r) => setTimeout(r, 100));
         }
-        await jobs.onModuleDestroy();
       },
     );
     await t.test(
@@ -395,5 +397,127 @@ test(
         2,
       );
     });
+    await t.test(
+      'promotion blocks dues unless explicitly carried into a later session',
+      async () => {
+        const nextYear = Number(year) + 1;
+        const next = await db.academicSession.create({
+          data: {
+            campusId: a.id,
+            name: 'Next session',
+            startsOn: new Date(`${nextYear}-01-01`),
+            endsOn: new Date(`${nextYear}-12-31`),
+            status: 'PLANNED',
+          },
+        });
+        sessions.push(next);
+        const nextClass = await db.schoolClass.create({
+          data: { campusId: a.id, name: 'Class 7', numericLevel: 7 },
+        });
+        const nextSection = await db.section.create({
+          data: { sessionId: next.id, classId: nextClass.id, name: 'A', capacity: 10 },
+        });
+        sections.push(nextSection);
+        const sourceSection = await db.section.create({
+          data: {
+            sessionId: sessions[0].id,
+            classId: classes[0].id,
+            name: 'Lifecycle',
+            capacity: 10,
+          },
+        });
+        sections.push(sourceSection);
+        const student = await db.student.create({
+          data: {
+            campusId: a.id,
+            studentCode: `${prefix}-promotion`,
+            fullName: 'Promotion learner',
+            enrollments: { create: { sessionId: sessions[0].id, sectionId: sourceSection.id } },
+          },
+          include: { enrollments: true },
+        });
+        const invoice = await db.invoice.create({
+          data: {
+            studentId: student.id,
+            sessionId: sessions[0].id,
+            dueDate: new Date(day),
+            totalMinor: 10000,
+          },
+        });
+        const body = {
+          enrollmentIds: [student.enrollments[0].id],
+          targetSectionId: nextSection.id,
+          carryDues: false,
+        };
+        assert.equal((await request('admin', a.id, 'lifecycle/promote', body)).status, 400);
+        assert.equal(
+          (await request('admin', a.id, 'lifecycle/promote', { ...body, carryDues: true })).status,
+          201,
+        );
+        assert.equal(
+          (await db.enrollment.findUniqueOrThrow({ where: { id: student.enrollments[0].id } }))
+            .status,
+          'PROMOTED',
+        );
+        assert.equal(
+          (await db.invoice.findUniqueOrThrow({ where: { id: invoice.id } })).status,
+          'CANCELLED',
+        );
+        assert.equal(
+          (
+            await db.invoice.findFirstOrThrow({
+              where: { studentId: student.id, sessionId: next.id },
+            })
+          ).totalMinor,
+          10000,
+        );
+      },
+    );
+    await t.test(
+      'cross-campus transfer prorates target fees and preserves original history',
+      async () => {
+        await db.feeStructure.create({
+          data: {
+            sessionId: sessions[1].id,
+            classId: classes[1].id,
+            name: 'Transfer monthly fees',
+            heads: { create: { name: 'Tuition', amountMinor: 20000, frequency: 'MONTHLY' } },
+          },
+        });
+        const response = await request('admin', a.id, 'lifecycle/transfer', {
+          enrollmentId: students[0].enrollments[0].id,
+          targetSectionId: sections[1].id,
+          effectiveDate: day,
+        });
+        assert.equal(response.status, 201, JSON.stringify(response.data));
+        assert.equal(response.data.campusId, b.id);
+        assert.equal(
+          (await db.enrollment.findUniqueOrThrow({ where: { id: students[0].enrollments[0].id } }))
+            .status,
+          'TRANSFERRED',
+        );
+        const date = new Date(day),
+          days = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate();
+        const invoice = await db.invoice.findFirstOrThrow({
+          where: { studentId: response.data.id },
+        });
+        assert.equal(
+          invoice.totalMinor,
+          Math.ceil((20000 * (days - date.getUTCDate() + 1)) / days),
+        );
+        assert.equal((await request('guardian', b.id, `students/${response.data.id}`)).status, 200);
+        assert.equal((await request('guardian', a.id, `students/${students[0].id}`)).status, 200);
+        assert.equal(
+          (
+            await request('admin', a.id, 'lifecycle/transfer', {
+              enrollmentId: students[0].enrollments[0].id,
+              targetSectionId: sections[1].id,
+              effectiveDate: day,
+            })
+          ).status,
+          404,
+        );
+      },
+    );
   },
 );
