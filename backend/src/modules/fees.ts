@@ -9,7 +9,7 @@ import { Audit } from '../audit';
 @Controller('fees')
 export class FeesController {
   constructor(@Inject(Db) private db: Db, @Inject(Scope) private scope: Scope, @Inject(Audit) private audit: Audit) {}
-  @Get('invoices')
+  @Get('invoices') @Roles(...FINANCE,'GUARDIAN','STUDENT')
   invoices(@Actor() c: Context) { return this.db.invoice.findMany({ where: { student: this.scope.studentFilter(c) }, include: { student: true, lines: true }, orderBy: [{ dueDate: 'asc' }, { id: 'asc' }] }); }
   @Get('structures') @Roles(...FINANCE)
   structures(@Actor() c: Context) { return this.db.feeStructure.findMany({ where: { session: { campusId: c.campusId } }, include: { heads: true, schoolClass: true, session: true } }); }

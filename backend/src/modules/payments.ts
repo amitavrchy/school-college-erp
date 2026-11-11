@@ -1,7 +1,8 @@
-import { BadRequestException, Body, Controller, ForbiddenException, Get, Inject, Param, Post, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, Body, Controller, ForbiddenException, Get, Inject, Param, Post, Query, Res, ServiceUnavailableException } from '@nestjs/common';
+import type { Response } from 'express';
 import { z } from 'zod';
 import { Db } from '../db';
-import { Actor, Context, FINANCE, hasRole, Public } from '../auth/access';
+import { Actor, Context, FINANCE, hasRole, Public, Roles } from '../auth/access';
 import { Scope } from '../auth/scope';
 import { id, money, parse } from '../common';
 import { config } from '../config';
@@ -9,7 +10,7 @@ import { PaymentService } from './payment.service';
 @Controller('payments')
 export class PaymentsController {
   constructor(@Inject(Db) private db: Db, @Inject(Scope) private scope: Scope, @Inject(PaymentService) private service: PaymentService) {}
-  @Get()
+  @Get() @Roles(...FINANCE,'GUARDIAN','STUDENT')
   list(@Actor() c: Context) { return this.db.payment.findMany({ where: { student: this.scope.studentFilter(c) }, include: { student: true, allocations: { include: { invoice: true } } }, orderBy: { createdAt: 'desc' } }); }
   @Get('config')
   settings() { return { mode: config.PAYMENT_MODE, onlineReady: config.PAYMENT_MODE === 'sslcommerz' && !!process.env.SSLCOMMERZ_STORE_ID && !!process.env.SSLCOMMERZ_STORE_PASSWORD, sandbox: process.env.SSLCOMMERZ_SANDBOX !== 'false' }; }
@@ -23,7 +24,7 @@ export class PaymentsController {
     if (payment.status === 'SUCCESS') return payment;
     if (v.provider === 'MANUAL') return this.service.settle(payment.id, `manual-${payment.id}`);
     const params = new URLSearchParams({ store_id: process.env.SSLCOMMERZ_STORE_ID!, store_passwd: process.env.SSLCOMMERZ_STORE_PASSWORD!, total_amount: (v.amountMinor / 100).toFixed(2), currency: 'BDT', tran_id: payment.id,
-      success_url: `${config.APP_URL}/fees?payment=verify`, fail_url: `${config.APP_URL}/fees?payment=failed`, cancel_url: `${config.APP_URL}/fees?payment=cancelled`, ipn_url: `${config.APP_URL}/api/payments/webhooks/sslcommerz`,
+      success_url: `${config.APP_URL}/api/payments/return?outcome=success`, fail_url: `${config.APP_URL}/api/payments/return?outcome=failed`, cancel_url: `${config.APP_URL}/api/payments/return?outcome=cancelled`, ipn_url: `${config.APP_URL}/api/payments/webhooks/sslcommerz`,
       cus_name: student.fullName, cus_email: 'accounts@example.invalid', cus_add1: 'Bangladesh', cus_city: 'Dhaka', cus_country: 'Bangladesh', cus_phone: '01700000000', shipping_method: 'NO', product_name: 'School fees', product_category: 'Education', product_profile: 'non-physical-goods' });
     const response = await fetch(`${this.gateway()}/gwprocess/v4/api.php`, { method: 'POST', body: params, signal: AbortSignal.timeout(15000) });
     const data = await response.json() as any;
@@ -31,6 +32,14 @@ export class PaymentsController {
     return { ...payment, checkoutUrl: data.GatewayPageURL };
   }
   private gateway() { return process.env.SSLCOMMERZ_SANDBOX === 'false' ? 'https://securepay.sslcommerz.com' : 'https://sandbox.sslcommerz.com'; }
+  @Public() @Post('return')
+  async paymentReturn(@Body() body: any, @Query('outcome') outcome: string, @Res() res: Response) {
+    if (outcome === 'success' && body?.val_id) {
+      try { await this.webhook(body); return res.redirect(303, `${config.APP_URL}/fees?payment=success`); }
+      catch { return res.redirect(303, `${config.APP_URL}/fees?payment=pending`); }
+    }
+    return res.redirect(303, `${config.APP_URL}/fees?payment=${outcome === 'cancelled' ? 'cancelled' : 'failed'}`);
+  }
   @Public() @Post('webhooks/sslcommerz')
   async webhook(@Body() body: unknown) {
     if (!process.env.SSLCOMMERZ_STORE_PASSWORD) throw new ServiceUnavailableException('Payment gateway unavailable');
