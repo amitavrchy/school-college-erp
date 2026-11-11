@@ -27,6 +27,10 @@ import { Billing } from './modules/billing';
 import { UploadsController } from './modules/uploads';
 import { Saas } from './saas/service';
 import { SaasController, PlatformController } from './saas/controllers';
+import { LibraryController } from './modules/library';
+import { TransportController } from './modules/transport';
+import { HomeworkController } from './modules/homework';
+import { SupportController } from './modules/support';
 @Module({
   imports: [
     JwtModule.register({
@@ -53,6 +57,7 @@ import { SaasController, PlatformController } from './saas/controllers';
     LifecycleController,
     UploadsController,
     SaasController, PlatformController,
+    LibraryController, TransportController, HomeworkController, SupportController,
   ],
   providers: [
     Db,

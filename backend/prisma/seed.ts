@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { hash } from 'bcryptjs';
 import { NCTB } from '../src/domain/grading';
+import { seedSaas } from './seed-saas';
 const db = new PrismaClient();
 async function seed() {
   if (!process.env.SEED_PASSWORD || process.env.SEED_PASSWORD.length < 12)
@@ -374,6 +375,7 @@ async function seed() {
       },
     });
   }
+  await seedSaas(db,process.env.SEED_PASSWORD!);
   console.log(
     'Seed complete: 2 campuses, 200 students, sample accounts, fees, results and attendance.',
   );
