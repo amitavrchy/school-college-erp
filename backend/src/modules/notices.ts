@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Inject, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Inject, Param, Post } from '@nestjs/common';
 import { z } from 'zod';
 import { Db } from '../db';
 import { Actor, Context, Roles, TEACHING, ACADEMIC, hasRole } from '../auth/access';
@@ -8,6 +8,11 @@ import { smsSegments } from '../domain/workflow';
 @Controller('notices')
 export class NoticesController {
   constructor(@Inject(Db) private db: Db, @Inject(Scope) private scope: Scope) {}
+  @Post(':id/schedule') @Roles(...ACADEMIC)
+  async schedule(@Actor() c: Context, @Param('id') noticeId: string) {
+    await this.db.notice.findFirstOrThrow({ where: { id: noticeId, campusId: c.campusId, status: 'DRAFT' } });
+    return this.db.notice.update({ where: { id: noticeId }, data: { status: 'SCHEDULED' } });
+  }
   @Get()
   async list(@Actor() c: Context) {
     const all = await this.db.notice.findMany({ where: { campusId: c.campusId, ...(!hasRole(c, TEACHING) ? { status: 'SENT', channels: { has: 'IN_APP' } } : {}) }, orderBy: { createdAt: 'desc' }, take: 100 });
