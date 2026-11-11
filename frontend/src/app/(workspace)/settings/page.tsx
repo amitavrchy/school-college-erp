@@ -166,6 +166,11 @@ export default function Settings() {
                           <Badge>{s.status}</Badge>
                         </td>
                         <td>
+                          {admin && s.status === 'PLANNED' && (
+                            <Button variant="ghost" onClick={() => setModal(`activate:${s.id}`)}>
+                              Activate session
+                            </Button>
+                          )}
                           {admin && s.status !== 'CLOSED' && (
                             <Button variant="ghost" onClick={() => setModal(`close:${s.id}`)}>
                               Close session
@@ -250,7 +255,26 @@ export default function Settings() {
           </div>
         )}
       </Panel>
-      {modal.startsWith('close:') ? (
+      {modal.startsWith('activate:') ? (
+        <FormModal
+          title="Activate academic session"
+          submitLabel="Activate session"
+          onClose={() => setModal('')}
+          fields={[
+            {
+              key: 'confirmation',
+              label: 'Type ACTIVATE to close the previous active session and start this one',
+            },
+          ]}
+          onSubmit={async (v) => {
+            if (v.confirmation !== 'ACTIVATE') throw new Error('Please type ACTIVATE to confirm');
+            const sessionId = modal.slice(9);
+            await post(`sessions/${sessionId}`, { status: 'ACTIVE' }, 'PATCH');
+            localStorage.setItem('session-id', sessionId);
+            window.location.reload();
+          }}
+        />
+      ) : modal.startsWith('close:') ? (
         <FormModal
           title="Close academic session"
           submitLabel="Close session"

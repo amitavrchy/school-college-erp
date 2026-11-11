@@ -2,7 +2,7 @@ import { Controller, Get, Inject, Param, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import PDFDocument from 'pdfkit';
 import { Db } from '../db';
-import { Actor, Context } from '../auth/access';
+import { Actor, Context, FINANCE, Roles } from '../auth/access';
 import { Scope } from '../auth/scope';
 import { ExamsController } from './exams';
 @Controller()
@@ -59,6 +59,7 @@ export class DocumentsController {
     doc.end();
   }
   @Get('payments/:id/receipt')
+  @Roles(...FINANCE, 'GUARDIAN', 'STUDENT')
   async receipt(@Actor() c: Context, @Param('id') paymentId: string, @Res() res: Response) {
     const p = await this.db.payment.findFirstOrThrow({
       where: { id: paymentId, status: 'SUCCESS', student: this.scope.studentFilter(c) },

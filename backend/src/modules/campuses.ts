@@ -70,9 +70,30 @@ export class CampusesController {
   @Patch('sessions/:id')
   @Roles(...ADMIN)
   async close(@Actor() c: Context, @Param('id') sessionId: string, @Body() body: unknown) {
-    parse(z.object({ status: z.literal('CLOSED') }), body);
+    const v = parse(z.object({ status: z.enum(['ACTIVE', 'CLOSED']) }), body);
     await this.scope.session(c, sessionId);
-    return this.db.academicSession.update({ where: { id: sessionId }, data: { status: 'CLOSED' } });
+    return this.db.serial(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Campus" WHERE id = ${c.campusId} FOR UPDATE`;
+      await tx.academicSession.findFirstOrThrow({
+        where: { id: sessionId, campusId: c.campusId, status: { not: 'CLOSED' } },
+      });
+      if (v.status === 'ACTIVE')
+        await tx.academicSession.updateMany({
+          where: { campusId: c.campusId, id: { not: sessionId }, status: 'ACTIVE' },
+          data: { status: 'CLOSED' },
+        });
+      const result = await tx.academicSession.update({ where: { id: sessionId }, data: v });
+      await tx.auditLog.create({
+        data: {
+          actorId: c.userId,
+          campusId: c.campusId,
+          action: `SESSION_${v.status}`,
+          entity: 'AcademicSession',
+          entityId: sessionId,
+        },
+      });
+      return result;
+    });
   }
   @Get('holidays')
   holidays(@Actor() c: Context) {

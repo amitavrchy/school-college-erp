@@ -154,9 +154,9 @@ test(
       await db.admissionApplication.deleteMany({ where: { sessionId: { in: ss } } });
       await db.section.deleteMany({ where: { sessionId: { in: ss } } });
       await db.subject.deleteMany({ where: { campusId: { in: campusIds } } });
-      await db.schoolClass.deleteMany({ where: { campusId: { in: campusIds } } });
       await db.feeHead.deleteMany({ where: { structure: { sessionId: { in: ss } } } });
       await db.feeStructure.deleteMany({ where: { sessionId: { in: ss } } });
+      await db.schoolClass.deleteMany({ where: { campusId: { in: campusIds } } });
       await db.academicSession.deleteMany({ where: { id: { in: ss } } });
       await db.userCampusRole.deleteMany({ where: { campusId: { in: campusIds } } });
       await db.auditLog.deleteMany({ where: { campusId: { in: campusIds } } });
@@ -516,6 +516,43 @@ test(
             })
           ).status,
           404,
+        );
+      },
+    );
+    await t.test(
+      'activating a planned session closes prior history and blocks later writes',
+      async () => {
+        const next = sessions[sessions.length - 1];
+        assert.equal(
+          (await request('admin', a.id, `sessions/${next.id}`, { status: 'ACTIVE' }, 'PATCH'))
+            .status,
+          200,
+        );
+        assert.equal(
+          (await db.academicSession.findUniqueOrThrow({ where: { id: sessions[0].id } })).status,
+          'CLOSED',
+        );
+        assert.equal(
+          (
+            await request('teacher', a.id, 'attendance/bulk', {
+              sectionId: sections[0].id,
+              date: day,
+              records: [{ enrollmentId: students[0].enrollments[0].id, status: 'PRESENT' }],
+            })
+          ).status,
+          403,
+        );
+        assert.equal(
+          (
+            await request(
+              'admin',
+              a.id,
+              `sessions/${sessions[0].id}`,
+              { status: 'ACTIVE' },
+              'PATCH',
+            )
+          ).status,
+          403,
         );
       },
     );
