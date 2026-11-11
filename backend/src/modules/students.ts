@@ -5,6 +5,7 @@ import { Actor, Context, Roles, ACADEMIC, ADMISSIONS } from '../auth/access';
 import { Scope } from '../auth/scope';
 import { Audit } from '../audit';
 import { date, id, parse } from '../common';
+import { requireQuota } from '../saas/policy';
 @Controller()
 export class StudentsController {
   constructor(
@@ -85,6 +86,7 @@ export class StudentsController {
     const section = await this.scope.section(c, v.sectionId, true);
     const { sectionId, ...data } = v;
     const student = await this.db.serial(async (tx) => {
+      await requireQuota(tx,c.orgId,'students');
       await tx.$queryRaw`SELECT id FROM "Section" WHERE id = ${sectionId} FOR UPDATE`;
       const count = await tx.enrollment.count({ where: { sectionId, status: 'ACTIVE' } });
       if (count >= section.capacity)

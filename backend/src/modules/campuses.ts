@@ -4,6 +4,7 @@ import { Db } from '../db';
 import { Actor, Context, Roles, ADMIN, ACADEMIC } from '../auth/access';
 import { parse, date, id } from '../common';
 import { Scope } from '../auth/scope';
+import { requireQuota } from '../saas/policy';
 @Controller()
 export class CampusesController {
   constructor(
@@ -29,12 +30,15 @@ export class CampusesController {
       body,
     );
     const campus = await this.db.campus.findUniqueOrThrow({ where: { id: c.campusId } });
-    return this.db.campus.create({
+    return this.db.serial(async tx=>{
+      await requireQuota(tx,campus.orgId,'campuses');
+      return tx.campus.create({
       data: {
         ...v,
         orgId: campus.orgId,
         roles: { create: { userId: c.userId, role: 'SUPER_ADMIN' } },
       },
+      });
     });
   }
   @Get('campuses/:id/sessions')

@@ -17,6 +17,7 @@ import { Audit } from '../audit';
 import { id, parse, phone } from '../common';
 import { ADMISSION_FLOW, canTransition, meritScore } from '../domain/workflow';
 import { JwtService } from '@nestjs/jwt';
+import { requireQuota, requireSubscription } from '../saas/policy';
 @Controller('admissions')
 export class AdmissionsController {
   constructor(
@@ -53,6 +54,8 @@ export class AdmissionsController {
     const session = await this.db.academicSession.findFirstOrThrow({
       where: { id: v.sessionId, status: 'ACTIVE' },
     });
+    const campus=await this.db.campus.findUniqueOrThrow({where:{id:session.campusId}});
+    await requireSubscription(this.db,campus.orgId);
     await this.db.schoolClass.findFirstOrThrow({
       where: { id: v.applyingClassId, campusId: session.campusId },
     });
@@ -190,6 +193,8 @@ export class AdmissionsController {
       const count = await tx.enrollment.count({
         where: { sectionId: offer.sectionId, status: 'ACTIVE' },
       });
+      const campus=await tx.campus.findUniqueOrThrow({where:{id:offer.section.schoolClass.campusId}});
+      await requireQuota(tx,campus.orgId,'students');
       if (count >= offer.section.capacity) throw new ConflictException('Section capacity reached');
       const student = await tx.student.create({
         data: {

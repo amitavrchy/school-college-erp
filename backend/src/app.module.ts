@@ -25,6 +25,8 @@ import { ReportsController } from './modules/reports';
 import { LifecycleController } from './modules/lifecycle';
 import { Billing } from './modules/billing';
 import { UploadsController } from './modules/uploads';
+import { Saas } from './saas/service';
+import { SaasController, PlatformController } from './saas/controllers';
 @Module({
   imports: [
     JwtModule.register({
@@ -50,9 +52,11 @@ import { UploadsController } from './modules/uploads';
     ReportsController,
     LifecycleController,
     UploadsController,
+    SaasController, PlatformController,
   ],
   providers: [
     Db,
+    Saas,
     Audit,
     Scope,
     Realtime,

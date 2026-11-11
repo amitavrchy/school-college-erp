@@ -16,8 +16,9 @@ import { z } from 'zod';
 import { Db } from '../db';
 import { parse } from '../common';
 import { config } from '../config';
-import { Actor, Context, Public } from './access';
+import { Actor, Context, Public, AccountAccess } from './access';
 @Controller('auth')
+@AccountAccess()
 export class AuthController {
   constructor(
     @Inject(Db) private db: Db,
@@ -49,13 +50,13 @@ export class AuthController {
       path: '/',
       maxAge: 8 * 3600_000,
     });
-    return { id: user.id, fullName: user.fullName };
+    return { id: user.id, fullName: user.fullName,platformAdmin:user.platformAdmin };
   }
   @Get('me')
   async me(@Actor() ctx: Context) {
     return this.db.user.findUnique({
       where: { id: ctx.userId },
-      select: { id: true, fullName: true, email: true, roles: { include: { campus: true } } },
+      select: { id: true, fullName: true, email: true,platformAdmin:true, memberships:{include:{organization:{include:{subscription:{include:{plan:true}}}}}},roles: { include: { campus: {include:{organization:{include:{subscription:{include:{plan:true}}}}}} } } },
     });
   }
   @Post('logout')
