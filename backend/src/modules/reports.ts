@@ -11,7 +11,7 @@ export class ReportsController {
     @Inject(Scope) private scope: Scope,
   ) {}
   @Get('reports/dashboard')
-  @Roles(...TEACHING, 'ACCOUNTS', 'ADMISSION_OFFICER')
+  @Roles(...TEACHING, 'ACCOUNTS', 'ADMISSION_OFFICER','LIBRARIAN','TRANSPORT_MANAGER')
   async dashboard(@Actor() c: Context) {
     const day = new Date(today());
     const start = new Date(`${today().slice(0, 7)}-01`);

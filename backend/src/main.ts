@@ -17,6 +17,7 @@ async function main() {
   app.use(cookieParser());
   app.useGlobalFilters(new ApiErrors());
   const origins = config.CORS_ORIGINS.split(',');
+  app.use('/api/saas/register',rateLimit({windowMs:3600000,limit:10,standardHeaders:'draft-8',legacyHeaders:false}));
   app.enableCors({ origin: origins, credentials: true });
   app.use(
     '/api',

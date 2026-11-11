@@ -12,6 +12,7 @@ import { Actor, Context, Roles, ACADEMIC } from '../auth/access';
 import { Scope } from '../auth/scope';
 import { id, parse, today } from '../common';
 import { outstanding } from '../domain/fees';
+import { requireQuota } from '../saas/policy';
 @Controller('lifecycle')
 @Roles(...ACADEMIC)
 export class LifecycleController {
@@ -159,6 +160,7 @@ export class LifecycleController {
       throw new BadRequestException('Invalid transfer session or effective date');
     return this.db.serial(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "Enrollment" WHERE id = ${source.id} FOR UPDATE`;
+      await requireQuota(tx,sourceCampus.orgId,'students');
       await tx.enrollment.findFirstOrThrow({
         where: { id: source.id, status: 'ACTIVE', session: { status: { not: 'CLOSED' } } },
       });

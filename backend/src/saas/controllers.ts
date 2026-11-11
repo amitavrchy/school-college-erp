@@ -8,7 +8,7 @@ import { Actor, Context, Public, PlatformOnly, BillingAccess, AccountAccess } fr
 import { id, parse, phone } from '../common';
 import { config } from '../config';
 import { Saas } from './service';
-const institution = z.object({organizationName:z.string().min(3).max(120),slug:z.string().min(3).max(48).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),campusName:z.string().min(3).max(100),planCode:z.enum(['STARTER','GROWTH','SCALE'])});
+const institution = z.object({organizationName:z.string().min(3).max(120),slug:z.string().min(3).max(48).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),campusName:z.string().min(3).max(100),planCode:z.enum(['STARTER','GROWTH','SCALE']),period:z.enum(['MONTHLY','YEARLY']).default('MONTHLY')});
 @Controller('saas') @BillingAccess()
 export class SaasController {
   constructor(@Inject(Db)private db:Db,@Inject(Saas)private saas:Saas,@Inject(JwtService)private jwt:JwtService){}
@@ -33,6 +33,8 @@ export class SaasController {
     await this.saas.owner(c);
     const v=parse(z.object({planId:id,period:z.enum(['MONTHLY','YEARLY']),method:z.enum(['BKASH','NAGAD','BANK']),reference:z.string().trim().min(6).max(80).regex(/^[a-zA-Z0-9-]+$/).transform(s=>s.toUpperCase()),senderPhone:phone}),body);
     const plan=await this.db.subscriptionPlan.findFirstOrThrow({where:{id:v.planId,active:true}});
+    const settings=await this.db.platformSettings.findUnique({where:{id:'platform'}});
+    if(v.method==='BKASH'&&!settings?.bkashNumber||v.method==='NAGAD'&&!settings?.nagadNumber||v.method==='BANK'&&!settings?.bankInstructions)throw new ForbiddenException('This receiving account has not been configured. Ask the platform team to configure it or activate your subscription manually.');
     return this.db.serial(async tx=>{
       await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${c.orgId} FOR UPDATE`;
       const amountMinor=v.period==='YEARLY'?plan.annualMinor:plan.monthlyMinor;
@@ -59,11 +61,11 @@ export class PlatformController {
   @Post('payments/:id/review')
   review(@Actor()c:Context,@Param('id')paymentId:string,@Body()body:unknown){const v=parse(z.object({decision:z.enum(['APPROVED','REJECTED']),receivedAmountMinor:z.number().int().min(0).max(100000000).optional(),note:z.string().min(5).max(500)}),body);return this.saas.review(paymentId,c.userId,v.decision,v.receivedAmountMinor,v.note);}
   @Post('organizations/:id/grant')
-  grant(@Actor()c:Context,@Param('id')organizationId:string,@Body()body:unknown){return this.saas.grant(organizationId,c.userId,parse(z.object({planId:id,period:z.enum(['MONTHLY','YEARLY']),amountMinor:z.number().int().min(0).max(100000000),reason:z.string().min(5).max(500)}),body));}
+  grant(@Actor()c:Context,@Param('id')organizationId:string,@Body()body:unknown){return this.saas.grant(organizationId,c.userId,parse(z.object({planId:id,period:z.enum(['MONTHLY','YEARLY']),amountMinor:z.number().int().min(0).max(100000000),reason:z.string().min(5).max(500),idempotencyKey:z.string().uuid()}),body));}
   @Patch('organizations/:id')
   async status(@Actor()c:Context,@Param('id')organizationId:string,@Body()body:unknown){const v=parse(z.object({status:z.enum(['ACTIVE','SUSPENDED']),reason:z.string().min(5).max(500)}),body);return this.db.$transaction(async tx=>{const org=await tx.organization.update({where:{id:organizationId},data:{status:v.status}});await tx.subscriptionEvent.create({data:{organizationId,actorId:c.userId,action:`ORGANIZATION_${v.status}`,meta:{reason:v.reason}}});return org;});}
   @Patch('settings')
-  settings(@Body()body:unknown){const v=parse(z.object({bkashNumber:phone.optional(),nagadNumber:phone.optional(),bankInstructions:z.string().max(2000).optional(),paymentInstructions:z.string().min(10).max(2000),supportEmail:z.email().optional()}),body);return this.db.platformSettings.upsert({where:{id:'platform'},create:{id:'platform',...v},update:v});}
+  settings(@Body()body:unknown){const number=z.union([phone,z.literal('')]).transform(v=>v||null).optional();const v=parse(z.object({bkashNumber:number,nagadNumber:number,bankInstructions:z.string().max(2000).optional(),paymentInstructions:z.string().min(10).max(2000),supportEmail:z.email().optional()}),body);return this.db.platformSettings.upsert({where:{id:'platform'},create:{id:'platform',...v},update:v});}
   @Patch('plans/:id')
   plan(@Param('id')planId:string,@Body()body:unknown){const v=parse(z.object({name:z.string().min(3).max(50),description:z.string().min(5).max(300),monthlyMinor:z.number().int().min(0).max(100000000),annualMinor:z.number().int().min(0).max(100000000),maxCampuses:z.number().int().min(1).max(1000),maxStudents:z.number().int().min(1).max(1000000),maxStaff:z.number().int().min(1).max(100000),features:z.array(z.enum(['library','transport','homework','support'])),active:z.boolean()}),body);return this.db.subscriptionPlan.update({where:{id:planId},data:v});}
 }

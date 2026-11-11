@@ -15,7 +15,7 @@ export class CampusesController {
   campuses(@Actor() c: Context) {
     return this.db.campus.findMany({
       where: { roles: { some: { userId: c.userId } } },
-      include: { sessions: { orderBy: { startsOn: 'desc' } } },
+      include: { sessions: { orderBy: { startsOn: 'desc' } }, organization:{include:{subscription:{include:{plan:true}}}} },
     });
   }
   @Post('campuses')

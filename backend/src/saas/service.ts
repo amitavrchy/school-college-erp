@@ -14,12 +14,12 @@ export class Saas {
     if(!member || !['OWNER','ADMIN'].includes(member.role))throw new ForbiddenException('Organization owner or billing administrator access is required');
     return member;
   }
-  async onboard(input:{organizationName:string;slug:string;campusName:string;planCode:string;fullName?:string;email?:string;password?:string},existingUserId?:string) {
+  async onboard(input:{organizationName:string;slug:string;campusName:string;planCode:string;period?:string;fullName?:string;email?:string;password?:string},existingUserId?:string) {
     const passwordHash=input.password?await hash(input.password,12):undefined;
     return this.db.serial(async tx=>{
       const plan=await tx.subscriptionPlan.findFirstOrThrow({where:{code:input.planCode,active:true}});
       const user=existingUserId?await tx.user.findUniqueOrThrow({where:{id:existingUserId}}):await tx.user.create({data:{fullName:input.fullName!,email:input.email!,passwordHash:passwordHash!}});
-      const org=await tx.organization.create({data:{name:input.organizationName,slug:input.slug,members:{create:{userId:user.id,role:'OWNER'}},subscription:{create:{planId:plan.id,status:'TRIAL',currentPeriodEnd:new Date(Date.now()+14*86400000)}}}});
+      const org=await tx.organization.create({data:{name:input.organizationName,slug:input.slug,members:{create:{userId:user.id,role:'OWNER'}},subscription:{create:{planId:plan.id,period:input.period||'MONTHLY',status:'TRIAL',currentPeriodEnd:new Date(Date.now()+14*86400000)}}}});
       const campus=await tx.campus.create({data:{orgId:org.id,name:input.campusName,code:'MAIN',roles:{create:{userId:user.id,role:'SUPER_ADMIN'}}}});
       const year=Number(new Intl.DateTimeFormat('en',{year:'numeric',timeZone:'Asia/Dhaka'}).format(new Date()));
       const session=await tx.academicSession.create({data:{campusId:campus.id,name:`${year} Academic Year`,startsOn:new Date(`${year}-01-01`),endsOn:new Date(`${year}-12-31`),status:'ACTIVE'}});
@@ -57,11 +57,14 @@ export class Saas {
       return tx.subscriptionPayment.update({where:{id:paymentId},data:{status:decision,reviewedBy:actorId,reviewNote:note,reviewedAt:new Date()}});
     });
   }
-  async grant(organizationId:string,actorId:string,v:{planId:string;period:string;amountMinor:number;reason:string}){
+  async grant(organizationId:string,actorId:string,v:{planId:string;period:string;amountMinor:number;reason:string;idempotencyKey:string}){
     return this.db.serial(async tx=>{
       await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${organizationId} FOR UPDATE`;
       await tx.organization.findUniqueOrThrow({where:{id:organizationId}});
-      const payment=await tx.subscriptionPayment.create({data:{organizationId,planId:v.planId,period:v.period,amountMinor:v.amountMinor,method:'MANUAL',reference:`GRANT-${randomUUID()}`,status:'APPROVED',submittedBy:actorId,reviewedBy:actorId,reviewNote:v.reason,reviewedAt:new Date()}});
+      const reference=`GRANT-${v.idempotencyKey}`;
+      const existing=await tx.subscriptionPayment.findUnique({where:{method_reference:{method:'MANUAL',reference}}});
+      if(existing){if(existing.organizationId!==organizationId||existing.planId!==v.planId||existing.period!==v.period||existing.amountMinor!==v.amountMinor)throw new ConflictException('Activation key was used for a different subscription');return tx.subscription.findUniqueOrThrow({where:{organizationId}});}
+      const payment=await tx.subscriptionPayment.create({data:{organizationId,planId:v.planId,period:v.period,amountMinor:v.amountMinor,method:'MANUAL',reference,status:'APPROVED',submittedBy:actorId,reviewedBy:actorId,reviewNote:v.reason,reviewedAt:new Date()}});
       return this.activate(tx,organizationId,v.planId,v.period,actorId,payment.id);
     });
   }

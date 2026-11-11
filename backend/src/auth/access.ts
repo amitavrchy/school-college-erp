@@ -87,6 +87,7 @@ export class AccessGuard implements CanActivate {
     const roles = user.roles.filter((r) => r.campusId === campusId).map((r) => r.role as Role);
     if (!roles.length && !account) throw new ForbiddenException('You do not have access to this campus');
     const orgId=user.roles.find(r=>r.campusId===campusId)?.campus.orgId||'';
+    if(!account && !await this.db.organizationMember.findUnique({where:{organizationId_userId:{organizationId:orgId,userId:user.id}}}))throw new ForbiddenException('You are not a member of this institution');
     const required = this.reflector.getAllAndOverride<Role[]>('roles', [
       context.getHandler(),
       context.getClass(),

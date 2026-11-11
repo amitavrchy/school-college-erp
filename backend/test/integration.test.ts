@@ -10,7 +10,7 @@ test(
   { skip: !process.env.DATABASE_URL, timeout: 120_000 },
   async (t) => {
     const db = new PrismaClient();
-    const org = await db.organization.create({ data: { name: prefix } });
+    const org = await db.organization.create({ data: { name: prefix, subscription:{create:{planId:'plan-scale',status:'ACTIVE',currentPeriodEnd:new Date(Date.now()+86400000)}},members:{create:['admin','teacher','guardian','accounts','principal'].map(userId=>({userId,role:userId==='admin'?'OWNER':'MEMBER'}))} } });
     const a = await db.campus.create({ data: { orgId: org.id, name: `${prefix}-A`, code: 'A' } });
     const b = await db.campus.create({ data: { orgId: org.id, name: `${prefix}-B`, code: 'B' } });
     const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
@@ -161,7 +161,7 @@ test(
       await db.userCampusRole.deleteMany({ where: { campusId: { in: campusIds } } });
       await db.auditLog.deleteMany({ where: { campusId: { in: campusIds } } });
       await db.campus.deleteMany({ where: { id: { in: campusIds } } });
-      await db.organization.delete({ where: { id: org.id } });
+      await db.organizationMember.deleteMany({where:{organizationId:org.id}});await db.subscriptionEvent.deleteMany({where:{organizationId:org.id}});await db.subscriptionPayment.deleteMany({where:{organizationId:org.id}});await db.subscription.deleteMany({where:{organizationId:org.id}});await db.organization.delete({ where: { id: org.id } });
       await db.$disconnect();
     });
     await t.test(
