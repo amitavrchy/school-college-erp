@@ -10,7 +10,8 @@
     "test": "tsx --test test/*.test.ts",
     "db:generate": "prisma generate",
     "db:migrate": "node --env-file-if-exists=../.env ../node_modules/prisma/build/index.js migrate deploy",
-    "db:seed": "node --env-file-if-exists=../.env --import tsx prisma/seed.ts"
+    "db:seed": "node --env-file-if-exists=../.env --import tsx prisma/seed.ts",
+    "test:integration": "node --env-file-if-exists=../.env --import tsx --test test/integration.test.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.9",
