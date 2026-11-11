@@ -6,12 +6,13 @@ import { config } from './config';
 import { today } from './common';
 import { lateFine } from './domain/fees';
 import { Realtime } from './realtime';
+import { Billing } from './modules/billing';
 @Injectable()
 export class Jobs implements OnModuleInit, OnModuleDestroy {
   private connection = new IORedis(config.REDIS_URL, { maxRetriesPerRequest: null });
   private queue = new Queue('campus-work', { connection: this.connection as any, defaultJobOptions: { attempts: 5, backoff: { type: 'exponential', delay: 3000 }, removeOnComplete: 1000, removeOnFail: 1000 } });
   private worker?: Worker;
-  constructor(@Inject(Db) private db: Db, @Inject(Realtime) private realtime: Realtime) {}
+  constructor(@Inject(Db) private db: Db, @Inject(Realtime) private realtime: Realtime, @Inject(Billing) private billing: Billing) {}
   async onModuleInit() {
     this.worker = new Worker('campus-work', async job => {
       if (job.name === 'sms') return this.sendSms(job.data.id);
@@ -70,7 +71,19 @@ export class Jobs implements OnModuleInit, OnModuleDestroy {
     const invoices = await this.db.invoice.findMany({ where: { status: { in: ['DUE','PARTIAL'] }, session: { status: { not: 'CLOSED' } } } });
     for (const invoice of invoices) {
       const fineMinor = lateFine(invoice.dueDate, now, Number(process.env.FEE_FINE_PER_DAY_MINOR || 1000), 50000);
-      if (fineMinor > invoice.fineMinor) await this.db.invoice.update({ where: { id: invoice.id }, data: { fineMinor } });
+      if (fineMinor > invoice.fineMinor) await this.db.invoice.updateMany({ where: { id: invoice.id, status: { in: ['DUE','PARTIAL'] }, session: { status: { not: 'CLOSED' } }, fineMinor: { lt: fineMinor } }, data: { fineMinor } });
+    }
+    const day = today();
+    if (day.endsWith('-01')) {
+      const structures = await this.db.feeStructure.findMany({ where: { session: { status: 'ACTIVE' } }, include: { session: true } });
+      for (const structure of structures) await this.billing.generate(structure.session.campusId, structure.id, new Date(`${day.slice(0,7)}-10`));
+    }
+    if (process.env.FEE_REMINDERS_ENABLED === 'true') {
+      const dueDays = [day, new Date(Date.parse(day) + 3 * 86400000).toISOString().slice(0,10)];
+      for (const invoice of invoices.filter(i => dueDays.includes(i.dueDate.toISOString().slice(0,10)))) {
+        const s = await this.db.student.findUniqueOrThrow({ where: { id: invoice.studentId }, include: { guardians: { where: { isPrimary: true }, include: { guardian: true } } } });
+        for (const g of s.guardians) if (g.guardian.phone) await this.sms(s.campusId, g.guardian.phone, `Fee reminder for ${s.fullName}: BDT ${((invoice.totalMinor+invoice.fineMinor-invoice.waivedMinor-invoice.paidMinor)/100).toFixed(2)} due on ${invoice.dueDate.toISOString().slice(0,10)}.`, `fee-reminder-${invoice.id}-${day}`);
+      }
     }
     const expired = await this.db.seatOffer.findMany({ where: { status: 'OFFERED', application: { offerExpiresAt: { lt: now } } } });
     for (const offer of expired) await this.db.serial(async tx => {

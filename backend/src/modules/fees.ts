@@ -6,9 +6,10 @@ import { Scope } from '../auth/scope';
 import { id, money, parse, date } from '../common';
 import { outstanding } from '../domain/fees';
 import { Audit } from '../audit';
+import { Billing } from './billing';
 @Controller('fees')
 export class FeesController {
-  constructor(@Inject(Db) private db: Db, @Inject(Scope) private scope: Scope, @Inject(Audit) private audit: Audit) {}
+  constructor(@Inject(Db) private db: Db, @Inject(Scope) private scope: Scope, @Inject(Audit) private audit: Audit, @Inject(Billing) private billing: Billing) {}
   @Get('invoices') @Roles(...FINANCE,'GUARDIAN','STUDENT')
   invoices(@Actor() c: Context) { return this.db.invoice.findMany({ where: { student: this.scope.studentFilter(c) }, include: { student: true, lines: true }, orderBy: [{ dueDate: 'asc' }, { id: 'asc' }] }); }
   @Get('structures') @Roles(...FINANCE)
@@ -22,18 +23,8 @@ export class FeesController {
   @Post('generate') @Roles(...FINANCE)
   async generate(@Actor() c: Context, @Body() body: unknown) {
     const v = parse(z.object({ structureId: id, dueDate: date }), body);
-    const structure = await this.db.feeStructure.findFirstOrThrow({ where: { id: v.structureId, session: { campusId: c.campusId, status: { not: 'CLOSED' } } }, include: { heads: true, session: true } });
-    if (v.dueDate < structure.session.startsOn || v.dueDate > structure.session.endsOn) throw new BadRequestException('Due date must be within the session');
-    const enrollments = await this.db.enrollment.findMany({ where: { sessionId: structure.sessionId, status: 'ACTIVE', section: { classId: structure.classId } } });
-    const month = v.dueDate.getUTCMonth();
-    let generated = 0;
-    for (const e of enrollments) {
-      const heads = structure.heads.filter(h => h.frequency === 'MONTHLY' || h.frequency === 'QUARTERLY' && month % 3 === structure.session.startsOn.getUTCMonth() % 3 || h.frequency === 'ONCE' && month === structure.session.startsOn.getUTCMonth());
-      if (!heads.length) continue;
-      const generationKey = `${structure.id}-${e.studentId}-${v.dueDate.toISOString().slice(0,7)}`;
-      await this.db.invoice.upsert({ where: { generationKey }, update: {}, create: { generationKey, studentId: e.studentId, sessionId: e.sessionId, dueDate: v.dueDate, totalMinor: heads.reduce((s,h) => s+h.amountMinor,0), lines: { create: heads.map(h => ({ feeHeadName: h.name, amountMinor: h.amountMinor })) } } }); generated++;
-    }
-    await this.audit.log(c, 'GENERATE', 'Invoice', structure.id, { generated }); return { generated };
+    const result = await this.billing.generate(c.campusId, v.structureId, v.dueDate);
+    await this.audit.log(c, 'GENERATE', 'Invoice', v.structureId, result); return result;
   }
   @Get('waivers') @Roles(...FINANCE)
   waivers(@Actor() c: Context) { return this.db.waiver.findMany({ where: { student: { campusId: c.campusId } }, include: { student: true, invoice: true } }); }
