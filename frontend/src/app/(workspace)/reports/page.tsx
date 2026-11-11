@@ -5,9 +5,123 @@ import { useCampus } from '@/components/shell';
 import { Badge, Button, PageTitle, Panel, State } from '@/components/ui';
 import { useData } from '@/lib/use-data';
 import { bdt, csvDownload, displayDate } from '@/lib/api';
-export default function Reports(){
-  const {can}=useCampus(),finance=can('SUPER_ADMIN','CAMPUS_ADMIN','PRINCIPAL','ACCOUNTS'),academic=can('SUPER_ADMIN','CAMPUS_ADMIN','PRINCIPAL','TEACHER','CLASS_TEACHER'),admin=can('SUPER_ADMIN','CAMPUS_ADMIN','PRINCIPAL');const [tab,setTab]=useState(finance?'Fee collection':'Attendance');
-  const {data,error,loading,reload}=useData(tab==='Fee collection'?'reports/fee-collection':tab==='Attendance'?'reports/attendance-summary':'reports/audit');
-  const rows=tab==='Fee collection'?data?.invoices.map((i:any)=>({student:i.student.fullName,due_date:i.dueDate.slice(0,10),invoiced_bdt:i.totalMinor/100,paid_bdt:i.paidMinor/100,balance_bdt:Math.max(0,i.totalMinor+i.fineMinor-i.waivedMinor-i.paidMinor)/100,status:i.status})):tab==='Attendance'?data?.map((r:any)=>({date:r.date.slice(0,10),status:r.status,students:r._count})):data?.map((a:any)=>({date:a.createdAt,actor:a.actorId,action:a.action,entity:a.entity,record:a.entityId}));
-  return <><PageTitle title="Reports & insights" eyebrow="A CLEARER VIEW. A BETTER NEXT STEP." description="Turn your campus records into decisions that make a difference."><Button variant="secondary" onClick={()=>window.print()}><Printer size={16}/>Print</Button><Button disabled={!rows?.length} onClick={()=>csvDownload(tab.toLowerCase().replaceAll(' ','-'),rows)}><Download size={16}/>Export CSV</Button></PageTitle><Panel><div className="toolbar"><div className="segmented">{[...(finance?['Fee collection']:[]),...(academic?['Attendance']:[]),...(admin?['Audit trail']:[])].map(t=><button key={t} className={tab===t?'selected':''} onClick={()=>setTab(t)}>{t}</button>)}</div><span className="text-muted">Campus-scoped records · Asia/Dhaka</span></div>{loading||error?<State loading={loading} error={error} onRetry={reload}/>:<>{tab==='Fee collection'&&<div className="stats-grid" style={{padding:'0 24px',gridTemplateColumns:'repeat(3,1fr)'}}>{[['Invoiced',data?.invoicedMinor],['Collected',data?.paidMinor],['Outstanding',data?.dueMinor]].map(([k,v])=><div className="stat-card" key={k}><span>{k}</span><strong>{bdt(Number(v)||0)}</strong></div>)}</div>}<div className="table-wrap"><table><thead><tr>{Object.keys(rows?.[0]||{}).map(k=><th key={k}>{k.replaceAll('_',' ')}</th>)}</tr></thead><tbody>{rows?.map((r:any,i:number)=><tr key={i}>{Object.entries(r).map(([k,v])=><td key={k}>{k==='status'?<Badge>{String(v)}</Badge>:String(v??'—')}</td>)}</tr>)}</tbody></table>{!rows?.length&&<State empty/>}</div></>}</Panel></>;
+export default function Reports() {
+  const { can } = useCampus(),
+    finance = can('SUPER_ADMIN', 'CAMPUS_ADMIN', 'PRINCIPAL', 'ACCOUNTS'),
+    academic = can('SUPER_ADMIN', 'CAMPUS_ADMIN', 'PRINCIPAL', 'TEACHER', 'CLASS_TEACHER'),
+    admin = can('SUPER_ADMIN', 'CAMPUS_ADMIN', 'PRINCIPAL');
+  const [tab, setTab] = useState(finance ? 'Fee collection' : 'Attendance');
+  const { data, error, loading, reload } = useData(
+    tab === 'Fee collection'
+      ? 'reports/fee-collection'
+      : tab === 'Attendance'
+        ? 'reports/attendance-summary'
+        : 'reports/audit',
+  );
+  const rows =
+    tab === 'Fee collection'
+      ? data?.invoices.map((i: any) => ({
+          student: i.student.fullName,
+          due_date: i.dueDate.slice(0, 10),
+          invoiced_bdt: i.totalMinor / 100,
+          paid_bdt: i.paidMinor / 100,
+          balance_bdt: Math.max(0, i.totalMinor + i.fineMinor - i.waivedMinor - i.paidMinor) / 100,
+          status: i.status,
+        }))
+      : tab === 'Attendance'
+        ? data?.map((r: any) => ({
+            date: r.date.slice(0, 10),
+            status: r.status,
+            students: r._count,
+          }))
+        : data?.map((a: any) => ({
+            date: a.createdAt,
+            actor: a.actorId,
+            action: a.action,
+            entity: a.entity,
+            record: a.entityId,
+          }));
+  return (
+    <>
+      <PageTitle
+        title="Reports & insights"
+        eyebrow="A CLEARER VIEW. A BETTER NEXT STEP."
+        description="Turn your campus records into decisions that make a difference."
+      >
+        <Button variant="secondary" onClick={() => window.print()}>
+          <Printer size={16} />
+          Print
+        </Button>
+        <Button
+          disabled={!rows?.length}
+          onClick={() => csvDownload(tab.toLowerCase().replaceAll(' ', '-'), rows)}
+        >
+          <Download size={16} />
+          Export CSV
+        </Button>
+      </PageTitle>
+      <Panel>
+        <div className="toolbar">
+          <div className="segmented">
+            {[
+              ...(finance ? ['Fee collection'] : []),
+              ...(academic ? ['Attendance'] : []),
+              ...(admin ? ['Audit trail'] : []),
+            ].map((t) => (
+              <button key={t} className={tab === t ? 'selected' : ''} onClick={() => setTab(t)}>
+                {t}
+              </button>
+            ))}
+          </div>
+          <span className="text-muted">Campus-scoped records · Asia/Dhaka</span>
+        </div>
+        {loading || error ? (
+          <State loading={loading} error={error} onRetry={reload} />
+        ) : (
+          <>
+            {tab === 'Fee collection' && (
+              <div
+                className="stats-grid"
+                style={{ padding: '0 24px', gridTemplateColumns: 'repeat(3,1fr)' }}
+              >
+                {[
+                  ['Invoiced', data?.invoicedMinor],
+                  ['Collected', data?.paidMinor],
+                  ['Outstanding', data?.dueMinor],
+                ].map(([k, v]) => (
+                  <div className="stat-card" key={k}>
+                    <span>{k}</span>
+                    <strong>{bdt(Number(v) || 0)}</strong>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    {Object.keys(rows?.[0] || {}).map((k) => (
+                      <th key={k}>{k.replaceAll('_', ' ')}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows?.map((r: any, i: number) => (
+                    <tr key={i}>
+                      {Object.entries(r).map(([k, v]) => (
+                        <td key={k}>
+                          {k === 'status' ? <Badge>{String(v)}</Badge> : String(v ?? '—')}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!rows?.length && <State empty />}
+            </div>
+          </>
+        )}
+      </Panel>
+    </>
+  );
 }

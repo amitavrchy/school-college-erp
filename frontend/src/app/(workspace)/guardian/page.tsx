@@ -6,11 +6,257 @@ import { useCampus } from '@/components/shell';
 import { Badge, Button, FormModal, PageTitle, Panel, Stat, State, Toast } from '@/components/ui';
 import { useData } from '@/lib/use-data';
 import { bdt, displayDate, pdfDownload, post } from '@/lib/api';
-export default function Guardian(){
-  const {user}=useCampus(),{data,error,loading,reload}=useData('guardians/me/dashboard'),{data:notices}=useData('notices'),{data:leaves,reload:reloadLeaves}=useData('leaves');const [selected,setSelected]=useState(''),[leave,setLeave]=useState(false),[toast,setToast]=useState('');
-  const student=data?.students.find((s:any)=>s.id===selected)||data?.students[0],enrollment=student?.enrollments.find((e:any)=>e.status==='ACTIVE')||student?.enrollments[0];
-  const {data:results}=useData(student?`exams/results/${student.id}`:null),{data:slots}=useData(enrollment?`timetable?sectionId=${enrollment.sectionId}`:null);
-  if(!data)return <State loading={loading} error={error} onRetry={reload}/>;
-  const attendance=enrollment?.attendance||[],present=attendance.filter((a:any)=>['PRESENT','LATE'].includes(a.status)).length,term=results?.flatMap((r:any)=>r.terms).at(-1);
-  return <><PageTitle title={`Hello, ${user.fullName.split(' ')[0]}.`} eyebrow="A LITTLE CLOSER TO THEIR EVERY DAY" description="Your family’s school life, connected in one place."><Link href="/fees" className="button primary"><Wallet size={17}/>View fees & payments</Link></PageTitle><div className="toolbar" style={{padding:'0 0 24px'}}><div className="segmented">{data.students.map((s:any)=><button key={s.id} className={s.id===student?.id?'selected':''} onClick={()=>setSelected(s.id)}>{s.fullName}</button>)}</div><Button variant="secondary" disabled={!student} onClick={()=>setLeave(true)}><Plus size={16}/>Request leave</Button></div>{!student?<Panel><State empty/></Panel>:<><div className="welcome-banner"><div><div className="banner-tag"><GraduationCap size={17}/>GROWING A LITTLE EVERY DAY</div><h2>{student.fullName}</h2><p>{student.studentCode} · {enrollment?.section.schoolClass.name} · Section {enrollment?.section.name} · Roll {enrollment?.rollNumber}</p></div><Button variant="secondary" onClick={async()=>{try{await pdfDownload(`students/${student.id}/report-card`,'report-card.pdf');}catch(e){setToast((e as Error).message);}}}><Download size={16}/>Report card</Button></div><div className="stats-grid"><Stat label="Recent attendance" value={attendance.length?`${Math.round(present/attendance.length*100)}%`:'—'} note={`Across ${attendance.length} marked school days`} icon={<ClipboardCheck size={18}/>} color="green"/><Stat label="Published GPA" value={term?term.gpa.toFixed(2):'—'} note={term?.term.name||'Results are not published yet'} icon={<GraduationCap size={18}/>} color="blue"/><Stat label="Outstanding fees" value={bdt(student.invoices.reduce((n:number,i:any)=>n+Math.max(0,i.totalMinor+i.fineMinor-i.waivedMinor-i.paidMinor),0))} note="View invoice details in Fees" icon={<Wallet size={18}/>} color="amber"/><Stat label="School notices" value={notices?.length||0} note="Updates for your family" icon={<CalendarDays size={18}/>} color="purple"/></div><div className="grid-two"><Panel title="Recent attendance" subtitle="A window into their school days"><div className="table-wrap"><table><thead><tr><th>Date</th><th>Status</th></tr></thead><tbody>{attendance.slice(0,7).map((a:any)=><tr key={a.id}><td>{displayDate(a.date)}</td><td><Badge>{a.status}</Badge></td></tr>)}</tbody></table>{!attendance.length&&<State empty/>}</div></Panel><Panel title="Family notice board" action={<Link href="/notices" className="button ghost">View all</Link>}><div className="notice-list">{notices?.slice(0,3).map((n:any)=><div key={n.id} className="notice-row"><div><h3>{n.title}</h3><p>{n.body}</p><time>{displayDate(n.createdAt)}</time></div></div>)}</div></Panel></div><div className="section-space"><Panel title="Weekly timetable"><div className="table-wrap"><table><thead><tr><th>Day</th><th>Period</th><th>Subject</th><th>Room</th></tr></thead><tbody>{slots?.map((s:any)=><tr key={s.id}><td>{['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][s.dayOfWeek]}</td><td>{s.period}</td><td><strong>{s.subject.name}</strong></td><td>{s.room}</td></tr>)}</tbody></table>{!slots?.length&&<State empty/>}</div></Panel></div><div className="section-space"><Panel title="Leave requests"><div className="table-wrap"><table><thead><tr><th>From</th><th>To</th><th>Reason</th><th>Status</th></tr></thead><tbody>{leaves?.filter((l:any)=>l.studentId===student.id).map((l:any)=><tr key={l.id}><td>{displayDate(l.fromDate)}</td><td>{displayDate(l.toDate)}</td><td>{l.reason}</td><td><Badge>{l.status}</Badge></td></tr>)}</tbody></table></div></Panel></div></>}{leave&&<FormModal title={`Request leave for ${student.fullName}`} onClose={()=>setLeave(false)} fields={[{key:'fromDate',label:'From date',type:'date'},{key:'toDate',label:'To date',type:'date'},{key:'reason',label:'Reason for leave',type:'textarea'}]} onSubmit={async v=>{await post('leaves',{...v,studentId:student.id});await reloadLeaves();setToast('Leave request submitted to your school');}}/>}<Toast message={toast} clear={()=>setToast('')}/></>;
+export default function Guardian() {
+  const { user } = useCampus(),
+    { data, error, loading, reload } = useData('guardians/me/dashboard'),
+    { data: notices } = useData('notices'),
+    { data: leaves, reload: reloadLeaves } = useData('leaves');
+  const [selected, setSelected] = useState(''),
+    [leave, setLeave] = useState(false),
+    [toast, setToast] = useState('');
+  const student = data?.students.find((s: any) => s.id === selected) || data?.students[0],
+    enrollment =
+      student?.enrollments.find((e: any) => e.status === 'ACTIVE') || student?.enrollments[0];
+  const { data: results } = useData(student ? `exams/results/${student.id}` : null),
+    { data: slots } = useData(enrollment ? `timetable?sectionId=${enrollment.sectionId}` : null);
+  if (!data) return <State loading={loading} error={error} onRetry={reload} />;
+  const attendance = enrollment?.attendance || [],
+    present = attendance.filter((a: any) => ['PRESENT', 'LATE'].includes(a.status)).length,
+    term = results?.flatMap((r: any) => r.terms).at(-1);
+  return (
+    <>
+      <PageTitle
+        title={`Hello, ${user.fullName.split(' ')[0]}.`}
+        eyebrow="A LITTLE CLOSER TO THEIR EVERY DAY"
+        description="Your family’s school life, connected in one place."
+      >
+        <Link href="/fees" className="button primary">
+          <Wallet size={17} />
+          View fees & payments
+        </Link>
+      </PageTitle>
+      <div className="toolbar" style={{ padding: '0 0 24px' }}>
+        <div className="segmented">
+          {data.students.map((s: any) => (
+            <button
+              key={s.id}
+              className={s.id === student?.id ? 'selected' : ''}
+              onClick={() => setSelected(s.id)}
+            >
+              {s.fullName}
+            </button>
+          ))}
+        </div>
+        <Button variant="secondary" disabled={!student} onClick={() => setLeave(true)}>
+          <Plus size={16} />
+          Request leave
+        </Button>
+      </div>
+      {!student ? (
+        <Panel>
+          <State empty />
+        </Panel>
+      ) : (
+        <>
+          <div className="welcome-banner">
+            <div>
+              <div className="banner-tag">
+                <GraduationCap size={17} />
+                GROWING A LITTLE EVERY DAY
+              </div>
+              <h2>{student.fullName}</h2>
+              <p>
+                {student.studentCode} · {enrollment?.section.schoolClass.name} · Section{' '}
+                {enrollment?.section.name} · Roll {enrollment?.rollNumber}
+              </p>
+            </div>
+            <Button
+              variant="secondary"
+              onClick={async () => {
+                try {
+                  await pdfDownload(`students/${student.id}/report-card`, 'report-card.pdf');
+                } catch (e) {
+                  setToast((e as Error).message);
+                }
+              }}
+            >
+              <Download size={16} />
+              Report card
+            </Button>
+          </div>
+          <div className="stats-grid">
+            <Stat
+              label="Recent attendance"
+              value={
+                attendance.length ? `${Math.round((present / attendance.length) * 100)}%` : '—'
+              }
+              note={`Across ${attendance.length} marked school days`}
+              icon={<ClipboardCheck size={18} />}
+              color="green"
+            />
+            <Stat
+              label="Published GPA"
+              value={term ? term.gpa.toFixed(2) : '—'}
+              note={term?.term.name || 'Results are not published yet'}
+              icon={<GraduationCap size={18} />}
+              color="blue"
+            />
+            <Stat
+              label="Outstanding fees"
+              value={bdt(
+                student.invoices.reduce(
+                  (n: number, i: any) =>
+                    n + Math.max(0, i.totalMinor + i.fineMinor - i.waivedMinor - i.paidMinor),
+                  0,
+                ),
+              )}
+              note="View invoice details in Fees"
+              icon={<Wallet size={18} />}
+              color="amber"
+            />
+            <Stat
+              label="School notices"
+              value={notices?.length || 0}
+              note="Updates for your family"
+              icon={<CalendarDays size={18} />}
+              color="purple"
+            />
+          </div>
+          <div className="grid-two">
+            <Panel title="Recent attendance" subtitle="A window into their school days">
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {attendance.slice(0, 7).map((a: any) => (
+                      <tr key={a.id}>
+                        <td>{displayDate(a.date)}</td>
+                        <td>
+                          <Badge>{a.status}</Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {!attendance.length && <State empty />}
+              </div>
+            </Panel>
+            <Panel
+              title="Family notice board"
+              action={
+                <Link href="/notices" className="button ghost">
+                  View all
+                </Link>
+              }
+            >
+              <div className="notice-list">
+                {notices?.slice(0, 3).map((n: any) => (
+                  <div key={n.id} className="notice-row">
+                    <div>
+                      <h3>{n.title}</h3>
+                      <p>{n.body}</p>
+                      <time>{displayDate(n.createdAt)}</time>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Panel>
+          </div>
+          <div className="section-space">
+            <Panel title="Weekly timetable">
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Day</th>
+                      <th>Period</th>
+                      <th>Subject</th>
+                      <th>Room</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {slots?.map((s: any) => (
+                      <tr key={s.id}>
+                        <td>
+                          {
+                            [
+                              'Sunday',
+                              'Monday',
+                              'Tuesday',
+                              'Wednesday',
+                              'Thursday',
+                              'Friday',
+                              'Saturday',
+                            ][s.dayOfWeek]
+                          }
+                        </td>
+                        <td>{s.period}</td>
+                        <td>
+                          <strong>{s.subject.name}</strong>
+                        </td>
+                        <td>{s.room}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {!slots?.length && <State empty />}
+              </div>
+            </Panel>
+          </div>
+          <div className="section-space">
+            <Panel title="Leave requests">
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>From</th>
+                      <th>To</th>
+                      <th>Reason</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {leaves
+                      ?.filter((l: any) => l.studentId === student.id)
+                      .map((l: any) => (
+                        <tr key={l.id}>
+                          <td>{displayDate(l.fromDate)}</td>
+                          <td>{displayDate(l.toDate)}</td>
+                          <td>{l.reason}</td>
+                          <td>
+                            <Badge>{l.status}</Badge>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </Panel>
+          </div>
+        </>
+      )}
+      {leave && (
+        <FormModal
+          title={`Request leave for ${student.fullName}`}
+          onClose={() => setLeave(false)}
+          fields={[
+            { key: 'fromDate', label: 'From date', type: 'date' },
+            { key: 'toDate', label: 'To date', type: 'date' },
+            { key: 'reason', label: 'Reason for leave', type: 'textarea' },
+          ]}
+          onSubmit={async (v) => {
+            await post('leaves', { ...v, studentId: student.id });
+            await reloadLeaves();
+            setToast('Leave request submitted to your school');
+          }}
+        />
+      )}
+      <Toast message={toast} clear={() => setToast('')} />
+    </>
+  );
 }

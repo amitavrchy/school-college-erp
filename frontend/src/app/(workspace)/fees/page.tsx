@@ -2,22 +2,465 @@
 import { useEffect, useState } from 'react';
 import { ArrowDownToLine, CreditCard, Download, Plus, Receipt, Wallet } from 'lucide-react';
 import { useCampus } from '@/components/shell';
-import { Badge, Button, Field, FormModal, PageTitle, Panel, SearchBox, Stat, State, Toast } from '@/components/ui';
+import {
+  Badge,
+  Button,
+  Field,
+  FormModal,
+  PageTitle,
+  Panel,
+  SearchBox,
+  Stat,
+  State,
+  Toast,
+} from '@/components/ui';
 import { useData } from '@/lib/use-data';
 import { bdt, csvDownload, displayDate, pdfDownload, post } from '@/lib/api';
-export default function Fees(){
-  const {can,sessionId}=useCampus(),finance=can('SUPER_ADMIN','CAMPUS_ADMIN','PRINCIPAL','ACCOUNTS');
-  const {data:invoices,error,loading,reload}=useData('fees/invoices'),{data:payments,reload:reloadPayments}=useData('payments'),{data:config}=useData('payments/config'),{data:structures,reload:reloadStructures}=useData(finance?'fees/structures':null),{data:classes}=useData(finance?'classes':null),{data:waivers,reload:reloadWaivers}=useData(finance?'fees/waivers':null);
-  const [tab,setTab]=useState('Invoices'),[search,setSearch]=useState(''),[status,setStatus]=useState(''),[modal,setModal]=useState(''),[toast,setToast]=useState('');
-  const due=(i:any)=>Math.max(0,i.totalMinor+i.fineMinor-i.waivedMinor-i.paidMinor),open=invoices?.filter((i:any)=>['DUE','PARTIAL'].includes(i.status))||[];
-  const students: any[]=[...new Map<string,any>(open.map((i:any)=>[i.student.id,i.student] as [string,any])).values()];
-  useEffect(()=>{if(finance&&new URLSearchParams(window.location.search).has('collect'))setModal('payment');},[finance]);
-  const fields:Record<string,Field[]>={payment:[{key:'studentId',label:'Student',options:students.map(s=>({value:s.id,label:`${s.fullName} · ${bdt(open.filter((i:any)=>i.studentId===s.id).reduce((n:number,i:any)=>n+due(i),0))} due`}))},{key:'amount',label:'Payment amount (BDT)',type:'number',min:.01,step:'0.01'},{key:'provider',label:'Payment method',options:[...(finance?[{value:'MANUAL',label:'Cash / bank (record receipt)'}]:[]),...(config?.onlineReady?[{value:'SSLCOMMERZ',label:`Online payment${config.sandbox?' (sandbox)':''}`}]:[])]}],
-    generate:[{key:'structureId',label:'Fee structure',options:structures?.filter((s:any)=>s.sessionId===sessionId).map((s:any)=>({value:s.id,label:s.name}))||[]},{key:'dueDate',label:'Due date',type:'date'}],
-    structure:[{key:'classId',label:'Class',options:classes?.map((c:any)=>({value:c.id,label:c.name}))||[]},{key:'name',label:'Structure name'},{key:'head',label:'Fee head name',defaultValue:'Tuition'},{key:'amount',label:'Amount (BDT)',type:'number',min:1,step:'0.01'},{key:'frequency',label:'Frequency',options:['MONTHLY','QUARTERLY','ONCE'].map(v=>({value:v,label:v}))}],
-    waiver:[{key:'invoiceId',label:'Invoice',options:open.map((i:any)=>({value:i.id,label:`${i.student.fullName} · ${displayDate(i.dueDate)} · ${bdt(due(i))}`}))},{key:'feeHeadName',label:'Exact fee head name',placeholder:'Tuition'},{key:'amount',label:'Waiver amount (BDT)',type:'number',min:1,step:'0.01'},{key:'reason',label:'Reason',type:'textarea'}],
+export default function Fees() {
+  const { can, sessionId } = useCampus(),
+    finance = can('SUPER_ADMIN', 'CAMPUS_ADMIN', 'PRINCIPAL', 'ACCOUNTS');
+  const { data: invoices, error, loading, reload } = useData('fees/invoices'),
+    { data: payments, reload: reloadPayments } = useData('payments'),
+    { data: config } = useData('payments/config'),
+    { data: structures, reload: reloadStructures } = useData(finance ? 'fees/structures' : null),
+    { data: classes } = useData(finance ? 'classes' : null),
+    { data: waivers, reload: reloadWaivers } = useData(finance ? 'fees/waivers' : null);
+  const [tab, setTab] = useState('Invoices'),
+    [search, setSearch] = useState(''),
+    [status, setStatus] = useState(''),
+    [modal, setModal] = useState(''),
+    [toast, setToast] = useState('');
+  const due = (i: any) => Math.max(0, i.totalMinor + i.fineMinor - i.waivedMinor - i.paidMinor),
+    open = invoices?.filter((i: any) => ['DUE', 'PARTIAL'].includes(i.status)) || [];
+  const students: any[] = [
+    ...new Map<string, any>(
+      open.map((i: any) => [i.student.id, i.student] as [string, any]),
+    ).values(),
+  ];
+  useEffect(() => {
+    if (finance && new URLSearchParams(window.location.search).has('collect')) setModal('payment');
+  }, [finance]);
+  const fields: Record<string, Field[]> = {
+    payment: [
+      {
+        key: 'studentId',
+        label: 'Student',
+        options: students.map((s) => ({
+          value: s.id,
+          label: `${s.fullName} · ${bdt(open.filter((i: any) => i.studentId === s.id).reduce((n: number, i: any) => n + due(i), 0))} due`,
+        })),
+      },
+      { key: 'amount', label: 'Payment amount (BDT)', type: 'number', min: 0.01, step: '0.01' },
+      {
+        key: 'provider',
+        label: 'Payment method',
+        options: [
+          ...(finance ? [{ value: 'MANUAL', label: 'Cash / bank (record receipt)' }] : []),
+          ...(config?.onlineReady
+            ? [
+                {
+                  value: 'SSLCOMMERZ',
+                  label: `Online payment${config.sandbox ? ' (sandbox)' : ''}`,
+                },
+              ]
+            : []),
+        ],
+      },
+    ],
+    generate: [
+      {
+        key: 'structureId',
+        label: 'Fee structure',
+        options:
+          structures
+            ?.filter((s: any) => s.sessionId === sessionId)
+            .map((s: any) => ({ value: s.id, label: s.name })) || [],
+      },
+      { key: 'dueDate', label: 'Due date', type: 'date' },
+    ],
+    structure: [
+      {
+        key: 'classId',
+        label: 'Class',
+        options: classes?.map((c: any) => ({ value: c.id, label: c.name })) || [],
+      },
+      { key: 'name', label: 'Structure name' },
+      { key: 'head', label: 'Fee head name', defaultValue: 'Tuition' },
+      { key: 'amount', label: 'Amount (BDT)', type: 'number', min: 1, step: '0.01' },
+      {
+        key: 'frequency',
+        label: 'Frequency',
+        options: ['MONTHLY', 'QUARTERLY', 'ONCE'].map((v) => ({ value: v, label: v })),
+      },
+    ],
+    waiver: [
+      {
+        key: 'invoiceId',
+        label: 'Invoice',
+        options: open.map((i: any) => ({
+          value: i.id,
+          label: `${i.student.fullName} · ${displayDate(i.dueDate)} · ${bdt(due(i))}`,
+        })),
+      },
+      { key: 'feeHeadName', label: 'Exact fee head name', placeholder: 'Tuition' },
+      { key: 'amount', label: 'Waiver amount (BDT)', type: 'number', min: 1, step: '0.01' },
+      { key: 'reason', label: 'Reason', type: 'textarea' },
+    ],
   };
-  async function submit(v:Record<string,any>){if(modal==='payment'){const result=await post('payments/intent',{studentId:v.studentId,amountMinor:Math.round(v.amount*100),provider:v.provider,idempotencyKey:crypto.randomUUID()});if(result.checkoutUrl){const url=new URL(result.checkoutUrl);if(url.protocol!=='https:'||!/(^|\.)sslcommerz\.com$/.test(url.hostname))throw new Error('Unexpected payment checkout URL');window.location.assign(url.href);return;}setToast('Payment recorded and allocated to the oldest invoices');}else if(modal==='structure'){await post('fees/structures',{classId:v.classId,sessionId,name:v.name,heads:[{name:v.head,amountMinor:Math.round(v.amount*100),frequency:v.frequency}]});setToast('Fee structure created');}else if(modal==='generate'){await post('fees/generate',v);setToast('Invoices generated. Existing invoices were kept.');}else{const {amount,...rest}=v;await post('fees/waivers',{...rest,amountMinor:Math.round(amount*100)});setToast('Waiver sent for a second staff member’s approval');}await Promise.all([reload(),reloadPayments(),reloadStructures(),reloadWaivers()]);}
-  const filtered=invoices?.filter((i:any)=>(!status||i.status===status)&&`${i.student.fullName} ${i.student.studentCode}`.toLowerCase().includes(search.toLowerCase()))||[];
-  return <><PageTitle title="Fees & payments" eyebrow="CLEAR BOOKS. MORE POSSIBILITIES." description="Thoughtful finances for a school that keeps moving forward.">{finance&&<Button variant="secondary" onClick={()=>setModal('generate')}><Plus size={16}/>Generate invoices</Button>}{(finance||config?.onlineReady)&&<Button onClick={()=>setModal('payment')}><CreditCard size={17}/>{finance?'Collect payment':'Pay fees'}</Button>}</PageTitle>{!finance&&!config?.onlineReady&&<div className="info-banner">Online payments are not configured. Please visit the accounts office to pay by cash or bank.</div>}<div className="stats-grid"><Stat label="Total invoiced" value={bdt(invoices?.reduce((s:number,i:any)=>s+i.totalMinor,0)||0)} note="Across your accessible records" icon={<Receipt size={18}/>} color="blue"/><Stat label="Collected" value={bdt(invoices?.reduce((s:number,i:any)=>s+i.paidMinor,0)||0)} note="Settled payment allocations" icon={<Wallet size={18}/>} color="green"/><Stat label="Outstanding" value={bdt(open.reduce((s:number,i:any)=>s+due(i),0))} note={`${open.length} open invoices`} icon={<CreditCard size={18}/>} color="amber"/><Stat label="Waived" value={bdt(invoices?.reduce((s:number,i:any)=>s+i.waivedMinor,0)||0)} note="Approved balance reductions" icon={<Receipt size={18}/>} color="purple"/></div><Panel><div className="toolbar"><div className="segmented">{['Invoices','Payments',...(finance?['Fee structures','Waivers']:[])].map(t=><button key={t} className={tab===t?'selected':''} onClick={()=>setTab(t)}>{t}</button>)}</div><Button variant="ghost" onClick={()=>csvDownload('fee-invoices',filtered.map((i:any)=>({invoice:i.id,student:i.student.fullName,due_date:i.dueDate.slice(0,10),total_bdt:i.totalMinor/100,paid_bdt:i.paidMinor/100,balance_bdt:due(i)/100,status:i.status})))}><ArrowDownToLine size={15}/>Export invoices</Button></div>{tab==='Invoices'?<><div className="toolbar" style={{paddingTop:0}}><SearchBox value={search} onChange={setSearch} placeholder="Search student or ID…"/><select aria-label="Invoice status" value={status} onChange={e=>setStatus(e.target.value)}><option value="">All invoices</option>{['DUE','PARTIAL','PAID','WAIVED','CANCELLED'].map(s=><option key={s}>{s}</option>)}</select></div>{loading||error||!filtered.length?<State loading={loading} error={error} empty={!filtered.length} onRetry={reload}/>:<div className="table-wrap"><table><thead><tr><th>Student</th><th>Fee heads</th><th>Due date</th><th>Invoice total</th><th>Balance</th><th>Status</th></tr></thead><tbody>{filtered.map((i:any)=><tr key={i.id}><td><strong>{i.student.fullName}</strong><div>{i.student.studentCode}</div></td><td>{i.lines.map((l:any)=>l.feeHeadName).join(', ')}</td><td>{displayDate(i.dueDate)}</td><td>{bdt(i.totalMinor)}{i.fineMinor>0&&<div className="text-muted">+ {bdt(i.fineMinor)} late fine</div>}</td><td><strong>{bdt(due(i))}</strong></td><td><Badge>{i.status}</Badge></td></tr>)}</tbody></table></div>}</>:tab==='Payments'?<div className="table-wrap"><table><thead><tr><th>Student</th><th>Date</th><th>Amount</th><th>Method</th><th>Status</th><th>Receipt</th></tr></thead><tbody>{payments?.map((p:any)=><tr key={p.id}><td><strong>{p.student.fullName}</strong></td><td>{displayDate(p.paidAt||p.createdAt)}</td><td>{bdt(p.amountMinor)}</td><td>{p.provider}</td><td><Badge>{p.status}</Badge></td><td>{p.status==='SUCCESS'&&<Button variant="ghost" onClick={async()=>{try{await pdfDownload(`payments/${p.id}/receipt`,`receipt-${p.id}.pdf`);}catch(e){setToast((e as Error).message);}}}><Download size={16}/>PDF</Button>}</td></tr>)}</tbody></table>{!payments?.length&&<State empty/>}</div>:tab==='Fee structures'?<><div className="toolbar"><p>Reusable fee plans for each class and session.</p><Button variant="secondary" onClick={()=>setModal('structure')}><Plus size={15}/>Create structure</Button></div><div className="table-wrap"><table><thead><tr><th>Structure</th><th>Class</th><th>Session</th><th>Fee heads</th><th>Base total</th></tr></thead><tbody>{structures?.map((s:any)=><tr key={s.id}><td><strong>{s.name}</strong></td><td>{s.schoolClass.name}</td><td>{s.session.name}</td><td>{s.heads.map((h:any)=>`${h.name} (${h.frequency.toLowerCase()})`).join(', ')}</td><td>{bdt(s.heads.reduce((n:number,h:any)=>n+h.amountMinor,0))}</td></tr>)}</tbody></table></div></>:<><div className="toolbar"><p>Above ৳1,000 requires a different Principal’s approval.</p><Button variant="secondary" onClick={()=>setModal('waiver')}><Plus size={15}/>Request waiver</Button></div><div className="table-wrap"><table><thead><tr><th>Student</th><th>Fee head</th><th>Amount</th><th>Reason</th><th>Status</th><th/></tr></thead><tbody>{waivers?.map((w:any)=><tr key={w.id}><td><strong>{w.student.fullName}</strong></td><td>{w.feeHeadName}</td><td>{bdt(w.amountMinor)}</td><td>{w.reason}</td><td><Badge>{w.status}</Badge></td><td>{w.status==='REQUESTED'&&<Button variant="ghost" onClick={async()=>{try{await post(`fees/waivers/${w.id}/approve`);await Promise.all([reloadWaivers(),reload()]);setToast('Waiver approved');}catch(e){setToast((e as Error).message);}}}>Approve</Button>}</td></tr>)}</tbody></table>{!waivers?.length&&<State empty/>}</div></>}</Panel>{modal&&<FormModal title={({payment:finance?'Record a payment':'Pay school fees',generate:'Generate class invoices',structure:'Create a fee structure',waiver:'Request a fee waiver'} as any)[modal]} fields={fields[modal]} onClose={()=>setModal('')} onSubmit={submit}/>}<Toast message={toast} clear={()=>setToast('')}/></>;
+  async function submit(v: Record<string, any>) {
+    if (modal === 'payment') {
+      const result = await post('payments/intent', {
+        studentId: v.studentId,
+        amountMinor: Math.round(v.amount * 100),
+        provider: v.provider,
+        idempotencyKey: crypto.randomUUID(),
+      });
+      if (result.checkoutUrl) {
+        const url = new URL(result.checkoutUrl);
+        if (url.protocol !== 'https:' || !/(^|\.)sslcommerz\.com$/.test(url.hostname))
+          throw new Error('Unexpected payment checkout URL');
+        window.location.assign(url.href);
+        return;
+      }
+      setToast('Payment recorded and allocated to the oldest invoices');
+    } else if (modal === 'structure') {
+      await post('fees/structures', {
+        classId: v.classId,
+        sessionId,
+        name: v.name,
+        heads: [{ name: v.head, amountMinor: Math.round(v.amount * 100), frequency: v.frequency }],
+      });
+      setToast('Fee structure created');
+    } else if (modal === 'generate') {
+      await post('fees/generate', v);
+      setToast('Invoices generated. Existing invoices were kept.');
+    } else {
+      const { amount, ...rest } = v;
+      await post('fees/waivers', { ...rest, amountMinor: Math.round(amount * 100) });
+      setToast('Waiver sent for a second staff member’s approval');
+    }
+    await Promise.all([reload(), reloadPayments(), reloadStructures(), reloadWaivers()]);
+  }
+  const filtered =
+    invoices?.filter(
+      (i: any) =>
+        (!status || i.status === status) &&
+        `${i.student.fullName} ${i.student.studentCode}`
+          .toLowerCase()
+          .includes(search.toLowerCase()),
+    ) || [];
+  return (
+    <>
+      <PageTitle
+        title="Fees & payments"
+        eyebrow="CLEAR BOOKS. MORE POSSIBILITIES."
+        description="Thoughtful finances for a school that keeps moving forward."
+      >
+        {finance && (
+          <Button variant="secondary" onClick={() => setModal('generate')}>
+            <Plus size={16} />
+            Generate invoices
+          </Button>
+        )}
+        {(finance || config?.onlineReady) && (
+          <Button onClick={() => setModal('payment')}>
+            <CreditCard size={17} />
+            {finance ? 'Collect payment' : 'Pay fees'}
+          </Button>
+        )}
+      </PageTitle>
+      {!finance && !config?.onlineReady && (
+        <div className="info-banner">
+          Online payments are not configured. Please visit the accounts office to pay by cash or
+          bank.
+        </div>
+      )}
+      <div className="stats-grid">
+        <Stat
+          label="Total invoiced"
+          value={bdt(invoices?.reduce((s: number, i: any) => s + i.totalMinor, 0) || 0)}
+          note="Across your accessible records"
+          icon={<Receipt size={18} />}
+          color="blue"
+        />
+        <Stat
+          label="Collected"
+          value={bdt(invoices?.reduce((s: number, i: any) => s + i.paidMinor, 0) || 0)}
+          note="Settled payment allocations"
+          icon={<Wallet size={18} />}
+          color="green"
+        />
+        <Stat
+          label="Outstanding"
+          value={bdt(open.reduce((s: number, i: any) => s + due(i), 0))}
+          note={`${open.length} open invoices`}
+          icon={<CreditCard size={18} />}
+          color="amber"
+        />
+        <Stat
+          label="Waived"
+          value={bdt(invoices?.reduce((s: number, i: any) => s + i.waivedMinor, 0) || 0)}
+          note="Approved balance reductions"
+          icon={<Receipt size={18} />}
+          color="purple"
+        />
+      </div>
+      <Panel>
+        <div className="toolbar">
+          <div className="segmented">
+            {['Invoices', 'Payments', ...(finance ? ['Fee structures', 'Waivers'] : [])].map(
+              (t) => (
+                <button key={t} className={tab === t ? 'selected' : ''} onClick={() => setTab(t)}>
+                  {t}
+                </button>
+              ),
+            )}
+          </div>
+          <Button
+            variant="ghost"
+            onClick={() =>
+              csvDownload(
+                'fee-invoices',
+                filtered.map((i: any) => ({
+                  invoice: i.id,
+                  student: i.student.fullName,
+                  due_date: i.dueDate.slice(0, 10),
+                  total_bdt: i.totalMinor / 100,
+                  paid_bdt: i.paidMinor / 100,
+                  balance_bdt: due(i) / 100,
+                  status: i.status,
+                })),
+              )
+            }
+          >
+            <ArrowDownToLine size={15} />
+            Export invoices
+          </Button>
+        </div>
+        {tab === 'Invoices' ? (
+          <>
+            <div className="toolbar" style={{ paddingTop: 0 }}>
+              <SearchBox value={search} onChange={setSearch} placeholder="Search student or ID…" />
+              <select
+                aria-label="Invoice status"
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+              >
+                <option value="">All invoices</option>
+                {['DUE', 'PARTIAL', 'PAID', 'WAIVED', 'CANCELLED'].map((s) => (
+                  <option key={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+            {loading || error || !filtered.length ? (
+              <State loading={loading} error={error} empty={!filtered.length} onRetry={reload} />
+            ) : (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Student</th>
+                      <th>Fee heads</th>
+                      <th>Due date</th>
+                      <th>Invoice total</th>
+                      <th>Balance</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((i: any) => (
+                      <tr key={i.id}>
+                        <td>
+                          <strong>{i.student.fullName}</strong>
+                          <div>{i.student.studentCode}</div>
+                        </td>
+                        <td>{i.lines.map((l: any) => l.feeHeadName).join(', ')}</td>
+                        <td>{displayDate(i.dueDate)}</td>
+                        <td>
+                          {bdt(i.totalMinor)}
+                          {i.fineMinor > 0 && (
+                            <div className="text-muted">+ {bdt(i.fineMinor)} late fine</div>
+                          )}
+                        </td>
+                        <td>
+                          <strong>{bdt(due(i))}</strong>
+                        </td>
+                        <td>
+                          <Badge>{i.status}</Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        ) : tab === 'Payments' ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Student</th>
+                  <th>Date</th>
+                  <th>Amount</th>
+                  <th>Method</th>
+                  <th>Status</th>
+                  <th>Receipt</th>
+                </tr>
+              </thead>
+              <tbody>
+                {payments?.map((p: any) => (
+                  <tr key={p.id}>
+                    <td>
+                      <strong>{p.student.fullName}</strong>
+                    </td>
+                    <td>{displayDate(p.paidAt || p.createdAt)}</td>
+                    <td>{bdt(p.amountMinor)}</td>
+                    <td>{p.provider}</td>
+                    <td>
+                      <Badge>{p.status}</Badge>
+                    </td>
+                    <td>
+                      {p.status === 'SUCCESS' && (
+                        <Button
+                          variant="ghost"
+                          onClick={async () => {
+                            try {
+                              await pdfDownload(`payments/${p.id}/receipt`, `receipt-${p.id}.pdf`);
+                            } catch (e) {
+                              setToast((e as Error).message);
+                            }
+                          }}
+                        >
+                          <Download size={16} />
+                          PDF
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!payments?.length && <State empty />}
+          </div>
+        ) : tab === 'Fee structures' ? (
+          <>
+            <div className="toolbar">
+              <p>Reusable fee plans for each class and session.</p>
+              <Button variant="secondary" onClick={() => setModal('structure')}>
+                <Plus size={15} />
+                Create structure
+              </Button>
+            </div>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Structure</th>
+                    <th>Class</th>
+                    <th>Session</th>
+                    <th>Fee heads</th>
+                    <th>Base total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {structures?.map((s: any) => (
+                    <tr key={s.id}>
+                      <td>
+                        <strong>{s.name}</strong>
+                      </td>
+                      <td>{s.schoolClass.name}</td>
+                      <td>{s.session.name}</td>
+                      <td>
+                        {s.heads
+                          .map((h: any) => `${h.name} (${h.frequency.toLowerCase()})`)
+                          .join(', ')}
+                      </td>
+                      <td>{bdt(s.heads.reduce((n: number, h: any) => n + h.amountMinor, 0))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="toolbar">
+              <p>Above ৳1,000 requires a different Principal’s approval.</p>
+              <Button variant="secondary" onClick={() => setModal('waiver')}>
+                <Plus size={15} />
+                Request waiver
+              </Button>
+            </div>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Fee head</th>
+                    <th>Amount</th>
+                    <th>Reason</th>
+                    <th>Status</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {waivers?.map((w: any) => (
+                    <tr key={w.id}>
+                      <td>
+                        <strong>{w.student.fullName}</strong>
+                      </td>
+                      <td>{w.feeHeadName}</td>
+                      <td>{bdt(w.amountMinor)}</td>
+                      <td>{w.reason}</td>
+                      <td>
+                        <Badge>{w.status}</Badge>
+                      </td>
+                      <td>
+                        {w.status === 'REQUESTED' && (
+                          <Button
+                            variant="ghost"
+                            onClick={async () => {
+                              try {
+                                await post(`fees/waivers/${w.id}/approve`);
+                                await Promise.all([reloadWaivers(), reload()]);
+                                setToast('Waiver approved');
+                              } catch (e) {
+                                setToast((e as Error).message);
+                              }
+                            }}
+                          >
+                            Approve
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!waivers?.length && <State empty />}
+            </div>
+          </>
+        )}
+      </Panel>
+      {modal && (
+        <FormModal
+          title={
+            (
+              {
+                payment: finance ? 'Record a payment' : 'Pay school fees',
+                generate: 'Generate class invoices',
+                structure: 'Create a fee structure',
+                waiver: 'Request a fee waiver',
+              } as any
+            )[modal]
+          }
+          fields={fields[modal]}
+          onClose={() => setModal('')}
+          onSubmit={submit}
+        />
+      )}
+      <Toast message={toast} clear={() => setToast('')} />
+    </>
+  );
 }

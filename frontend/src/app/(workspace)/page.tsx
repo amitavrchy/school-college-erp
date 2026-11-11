@@ -2,21 +2,361 @@
 import Link from 'next/link';
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { ArrowDownToLine, ArrowRight, ArrowUpRight, CalendarDays, ChevronDown, ClipboardCheck, GraduationCap, Megaphone, Plus, UserRoundPlus, Users, Wallet } from 'lucide-react';
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import {
+  ArrowDownToLine,
+  ArrowRight,
+  ArrowUpRight,
+  CalendarDays,
+  ChevronDown,
+  ClipboardCheck,
+  GraduationCap,
+  Megaphone,
+  Plus,
+  UserRoundPlus,
+  Users,
+  Wallet,
+} from 'lucide-react';
 import { useCampus } from '@/components/shell';
 import { Badge, Button, PageTitle, Panel, Stat, State } from '@/components/ui';
 import { CampusArt } from '@/components/campus-art';
 import { bdt, csvDownload, displayDate, number } from '@/lib/api';
 import { useData } from '@/lib/use-data';
 export default function Overview() {
-  const {user,campus,roles,can}=useCampus(),router=useRouter();
-  const family=roles.every(r=>['GUARDIAN','STUDENT'].includes(r));
-  const {data:d,error,loading,reload}=useData(family?null:'reports/dashboard');const {data:notices}=useData('notices');
-  useEffect(()=>{if(family)router.replace('/guardian');},[family,router]);
-  if(!d)return <State loading={loading||family} error={error} onRetry={reload}/>;
-  const rate=d.attendanceRate??0;
-  const absent=d.attendance.find((a:any)=>a.status==='ABSENT')?._count||0, late=d.attendance.find((a:any)=>a.status==='LATE')?._count||0, present=d.present-late;
-  const actions=[{href:'/students?add=1',label:'Add student',icon:UserRoundPlus,bg:'#edf3fb',color:'#7c9bc6',roles:['SUPER_ADMIN','CAMPUS_ADMIN','PRINCIPAL','ADMISSION_OFFICER']},{href:'/attendance',label:'Take attendance',icon:ClipboardCheck,bg:'#eef5ec',color:'#8caa80',roles:['SUPER_ADMIN','CAMPUS_ADMIN','PRINCIPAL','TEACHER','CLASS_TEACHER']},{href:'/fees?collect=1',label:'Collect fees',icon:Wallet,bg:'#fbf3e7',color:'#c4a26b',roles:['SUPER_ADMIN','CAMPUS_ADMIN','PRINCIPAL','ACCOUNTS']},{href:'/notices?add=1',label:'Create notice',icon:Megaphone,bg:'#f2eef8',color:'#aa95c5',roles:['SUPER_ADMIN','CAMPUS_ADMIN','PRINCIPAL','TEACHER','CLASS_TEACHER']}].filter(a=>can(...a.roles));
-  return <><PageTitle eyebrow="A GOOD DAY TO MAKE A DIFFERENCE" title="Campus overview" description="A little clarity for everything happening at your campus."><div className="date-pill"><CalendarDays size={16}/>{new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Dhaka',day:'numeric',month:'short',year:'numeric'}).format(new Date())}</div><Button variant="secondary" onClick={()=>csvDownload('campus-overview',[{campus:campus.name,students:d.students,attendance_percent:rate,collected_bdt:d.collectedMinor/100,outstanding_bdt:d.dueMinor/100}])}><ArrowDownToLine size={16}/>Export overview</Button></PageTitle><section className="welcome-banner"><div><div className="banner-tag"><span className="status-dot"/>LET’S MAKE TODAY COUNT</div><h2>Welcome back, {user.fullName.split(' ')[0]}. <span style={{fontSize:21}}>☀</span></h2><p>Your campus is a place of possibilities. Here’s a look at how your community is doing today.</p></div><CampusArt/></section><div className="stats-grid"><Stat label="Total students" value={number(d.students)} note="Across all classes & sections" icon={<Users size={19}/>} color="blue"/><Stat label="Today's attendance" value={d.attendanceRate===null?'Not marked':`${rate}%`} note={`${d.present} present · ${d.marked} marked today`} icon={<ClipboardCheck size={19}/>} color="green"/><Stat label="Fees collected" value={bdt(d.collectedMinor)} note="Collected this month" icon={<Wallet size={19}/>} color="amber"/><Stat label="Outstanding dues" value={bdt(d.dueMinor)} note={`${d.overdueCount} overdue invoices`} icon={<GraduationCap size={19}/>} color="purple"/></div><div className="dashboard-grid"><Panel title="Fee collection" subtitle="A clearer picture of this month’s collections" action={<span className="legend">This month</span>}><div className="chart-summary"><strong>{bdt(d.collectedMinor)}</strong><span>Total collected</span></div><div className="chart-area" role="img" aria-label="Daily fee collection chart"><ResponsiveContainer width="100%" height="100%"><AreaChart data={d.collection} margin={{top:12,right:15,left:0,bottom:0}}><defs><linearGradient id="collection" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#87ad92" stopOpacity={.24}/><stop offset="95%" stopColor="#87ad92" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="4 5" vertical={false} stroke="#edf1eb"/><XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fontSize:14,fill:'#a2ada4'}} minTickGap={20} tickMargin={12}/><YAxis axisLine={false} tickLine={false} tick={{fontSize:14,fill:'#a2ada4'}} tickFormatter={v=>`${v/1000}k`} width={45}/><Tooltip content={({active,payload,label})=>active&&payload?.length?<div className="chart-tooltip"><p>Day {label}</p><strong>{bdt(Number(payload[0].value)*100)}</strong></div>:null}/><Area type="monotone" dataKey="amount" stroke="#7ba18a" strokeWidth={2.5} fill="url(#collection)" isAnimationActive={false}/></AreaChart></ResponsiveContainer></div></Panel><Panel title="Attendance today" subtitle="Every presence makes a difference" action={<Link className="icon-button" href="/attendance" aria-label="View attendance"><ArrowUpRight size={18}/></Link>}><div className="donut-wrap"><div className="donut" style={{'--present':`${d.marked?present/d.marked*100:0}%`,'--late':`${d.marked?(present+late)/d.marked*100:0}%`,...(!d.marked?{background:'#edf1eb'}:{})} as React.CSSProperties}><div className="donut-center"><strong>{d.marked?`${rate}%`:'—'}</strong><span>Attendance rate</span></div></div></div><div className="attendance-legend">{[[present,'Present','#7ba88c'],[absent,'Absent','#ed9c92'],[late,'Late','#ecc884']].map(([v,l,c])=><div key={l}><strong>{v}</strong><span><i style={{background:String(c)}}/>{l}</span></div>)}</div></Panel></div><div className="dashboard-grid"><Panel title="A few things, one click away" subtitle="Your everyday essentials, right here"><div className="quick-actions">{actions.map(a=><Link key={a.href} href={a.href} className="quick-action"><span className="quick-icon" style={{background:a.bg,color:a.color}}><a.icon size={21}/></span>{a.label}</Link>)}</div></Panel><Panel title="From the notice board" action={<Link href="/notices" className="button ghost">View all <ArrowRight size={14}/></Link>}><div className="notice-list">{notices?.slice(0,2).map((n:any)=><div className="notice-row" key={n.id}><div className="notice-symbol"><Megaphone size={18}/></div><div><h3>{n.title}</h3><time>{displayDate(n.createdAt)}</time></div><Link href="/notices" aria-label={`Read ${n.title}`}><ArrowUpRight size={17}/></Link></div>)}{!notices?.length&&<p style={{padding:'15px 0'}}>No notices yet. Stay tuned.</p>}</div></Panel></div><div className="bottom-grid"><Panel title="A look at your classrooms" subtitle="Room to learn, grow, and belong" action={<Link href="/academics" className="button ghost">View all <ArrowRight size={14}/></Link>}><div className="table-wrap"><table><thead><tr><th>Class & section</th><th>Students</th><th>Capacity</th><th>Status</th></tr></thead><tbody>{d.sections.slice(0,4).map((s:any)=><tr key={s.id}><td><strong>{s.schoolClass.name} · {s.name}</strong></td><td>{s._count.enrollments} students</td><td><div className="progress-line"><span style={{width:`${s._count.enrollments/s.capacity*100}%`}}/></div></td><td><Badge>Active</Badge></td></tr>)}</tbody></table></div></Panel><Panel title="Around your campus" subtitle="The latest little steps forward"><div className="activity-list">{d.activity.slice(0,4).map((a:any)=><div className="activity-row" key={a.id}><div className="activity-dot"/><div><p>{a.action.replaceAll('_',' ').toLowerCase()} · {a.entity}</p><time>{displayDate(a.createdAt)}</time></div></div>)}</div></Panel></div></>;
+  const { user, campus, roles, can } = useCampus(),
+    router = useRouter();
+  const family = roles.every((r) => ['GUARDIAN', 'STUDENT'].includes(r));
+  const { data: d, error, loading, reload } = useData(family ? null : 'reports/dashboard');
+  const { data: notices } = useData('notices');
+  useEffect(() => {
+    if (family) router.replace('/guardian');
+  }, [family, router]);
+  if (!d) return <State loading={loading || family} error={error} onRetry={reload} />;
+  const rate = d.attendanceRate ?? 0;
+  const absent = d.attendance.find((a: any) => a.status === 'ABSENT')?._count || 0,
+    late = d.attendance.find((a: any) => a.status === 'LATE')?._count || 0,
+    present = d.present - late;
+  const actions = [
+    {
+      href: '/students?add=1',
+      label: 'Add student',
+      icon: UserRoundPlus,
+      bg: '#edf3fb',
+      color: '#7c9bc6',
+      roles: ['SUPER_ADMIN', 'CAMPUS_ADMIN', 'PRINCIPAL', 'ADMISSION_OFFICER'],
+    },
+    {
+      href: '/attendance',
+      label: 'Take attendance',
+      icon: ClipboardCheck,
+      bg: '#eef5ec',
+      color: '#8caa80',
+      roles: ['SUPER_ADMIN', 'CAMPUS_ADMIN', 'PRINCIPAL', 'TEACHER', 'CLASS_TEACHER'],
+    },
+    {
+      href: '/fees?collect=1',
+      label: 'Collect fees',
+      icon: Wallet,
+      bg: '#fbf3e7',
+      color: '#c4a26b',
+      roles: ['SUPER_ADMIN', 'CAMPUS_ADMIN', 'PRINCIPAL', 'ACCOUNTS'],
+    },
+    {
+      href: '/notices?add=1',
+      label: 'Create notice',
+      icon: Megaphone,
+      bg: '#f2eef8',
+      color: '#aa95c5',
+      roles: ['SUPER_ADMIN', 'CAMPUS_ADMIN', 'PRINCIPAL', 'TEACHER', 'CLASS_TEACHER'],
+    },
+  ].filter((a) => can(...a.roles));
+  return (
+    <>
+      <PageTitle
+        eyebrow="A GOOD DAY TO MAKE A DIFFERENCE"
+        title="Campus overview"
+        description="A little clarity for everything happening at your campus."
+      >
+        <div className="date-pill">
+          <CalendarDays size={16} />
+          {new Intl.DateTimeFormat('en-GB', {
+            timeZone: 'Asia/Dhaka',
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+          }).format(new Date())}
+        </div>
+        <Button
+          variant="secondary"
+          onClick={() =>
+            csvDownload('campus-overview', [
+              {
+                campus: campus.name,
+                students: d.students,
+                attendance_percent: rate,
+                collected_bdt: d.collectedMinor / 100,
+                outstanding_bdt: d.dueMinor / 100,
+              },
+            ])
+          }
+        >
+          <ArrowDownToLine size={16} />
+          Export overview
+        </Button>
+      </PageTitle>
+      <section className="welcome-banner">
+        <div>
+          <div className="banner-tag">
+            <span className="status-dot" />
+            LET’S MAKE TODAY COUNT
+          </div>
+          <h2>
+            Welcome back, {user.fullName.split(' ')[0]}. <span style={{ fontSize: 21 }}>☀</span>
+          </h2>
+          <p>
+            Your campus is a place of possibilities. Here’s a look at how your community is doing
+            today.
+          </p>
+        </div>
+        <CampusArt />
+      </section>
+      <div className="stats-grid">
+        <Stat
+          label="Total students"
+          value={number(d.students)}
+          note="Across all classes & sections"
+          icon={<Users size={19} />}
+          color="blue"
+        />
+        <Stat
+          label="Today's attendance"
+          value={d.attendanceRate === null ? 'Not marked' : `${rate}%`}
+          note={`${d.present} present · ${d.marked} marked today`}
+          icon={<ClipboardCheck size={19} />}
+          color="green"
+        />
+        <Stat
+          label="Fees collected"
+          value={bdt(d.collectedMinor)}
+          note="Collected this month"
+          icon={<Wallet size={19} />}
+          color="amber"
+        />
+        <Stat
+          label="Outstanding dues"
+          value={bdt(d.dueMinor)}
+          note={`${d.overdueCount} overdue invoices`}
+          icon={<GraduationCap size={19} />}
+          color="purple"
+        />
+      </div>
+      <div className="dashboard-grid">
+        <Panel
+          title="Fee collection"
+          subtitle="A clearer picture of this month’s collections"
+          action={<span className="legend">This month</span>}
+        >
+          <div className="chart-summary">
+            <strong>{bdt(d.collectedMinor)}</strong>
+            <span>Total collected</span>
+          </div>
+          <div className="chart-area" role="img" aria-label="Daily fee collection chart">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={d.collection} margin={{ top: 12, right: 15, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="collection" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#87ad92" stopOpacity={0.24} />
+                    <stop offset="95%" stopColor="#87ad92" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="4 5" vertical={false} stroke="#edf1eb" />
+                <XAxis
+                  dataKey="day"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 14, fill: '#a2ada4' }}
+                  minTickGap={20}
+                  tickMargin={12}
+                />
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 14, fill: '#a2ada4' }}
+                  tickFormatter={(v) => `${v / 1000}k`}
+                  width={45}
+                />
+                <Tooltip
+                  content={({ active, payload, label }) =>
+                    active && payload?.length ? (
+                      <div className="chart-tooltip">
+                        <p>Day {label}</p>
+                        <strong>{bdt(Number(payload[0].value) * 100)}</strong>
+                      </div>
+                    ) : null
+                  }
+                />
+                <Area
+                  type="monotone"
+                  dataKey="amount"
+                  stroke="#7ba18a"
+                  strokeWidth={2.5}
+                  fill="url(#collection)"
+                  isAnimationActive={false}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </Panel>
+        <Panel
+          title="Attendance today"
+          subtitle="Every presence makes a difference"
+          action={
+            <Link className="icon-button" href="/attendance" aria-label="View attendance">
+              <ArrowUpRight size={18} />
+            </Link>
+          }
+        >
+          <div className="donut-wrap">
+            <div
+              className="donut"
+              style={
+                {
+                  '--present': `${d.marked ? (present / d.marked) * 100 : 0}%`,
+                  '--late': `${d.marked ? ((present + late) / d.marked) * 100 : 0}%`,
+                  ...(!d.marked ? { background: '#edf1eb' } : {}),
+                } as React.CSSProperties
+              }
+            >
+              <div className="donut-center">
+                <strong>{d.marked ? `${rate}%` : '—'}</strong>
+                <span>Attendance rate</span>
+              </div>
+            </div>
+          </div>
+          <div className="attendance-legend">
+            {[
+              [present, 'Present', '#7ba88c'],
+              [absent, 'Absent', '#ed9c92'],
+              [late, 'Late', '#ecc884'],
+            ].map(([v, l, c]) => (
+              <div key={l}>
+                <strong>{v}</strong>
+                <span>
+                  <i style={{ background: String(c) }} />
+                  {l}
+                </span>
+              </div>
+            ))}
+          </div>
+        </Panel>
+      </div>
+      <div className="dashboard-grid">
+        <Panel title="A few things, one click away" subtitle="Your everyday essentials, right here">
+          <div className="quick-actions">
+            {actions.map((a) => (
+              <Link key={a.href} href={a.href} className="quick-action">
+                <span className="quick-icon" style={{ background: a.bg, color: a.color }}>
+                  <a.icon size={21} />
+                </span>
+                {a.label}
+              </Link>
+            ))}
+          </div>
+        </Panel>
+        <Panel
+          title="From the notice board"
+          action={
+            <Link href="/notices" className="button ghost">
+              View all <ArrowRight size={14} />
+            </Link>
+          }
+        >
+          <div className="notice-list">
+            {notices?.slice(0, 2).map((n: any) => (
+              <div className="notice-row" key={n.id}>
+                <div className="notice-symbol">
+                  <Megaphone size={18} />
+                </div>
+                <div>
+                  <h3>{n.title}</h3>
+                  <time>{displayDate(n.createdAt)}</time>
+                </div>
+                <Link href="/notices" aria-label={`Read ${n.title}`}>
+                  <ArrowUpRight size={17} />
+                </Link>
+              </div>
+            ))}
+            {!notices?.length && <p style={{ padding: '15px 0' }}>No notices yet. Stay tuned.</p>}
+          </div>
+        </Panel>
+      </div>
+      <div className="bottom-grid">
+        <Panel
+          title="A look at your classrooms"
+          subtitle="Room to learn, grow, and belong"
+          action={
+            <Link href="/academics" className="button ghost">
+              View all <ArrowRight size={14} />
+            </Link>
+          }
+        >
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Class & section</th>
+                  <th>Students</th>
+                  <th>Capacity</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {d.sections.slice(0, 4).map((s: any) => (
+                  <tr key={s.id}>
+                    <td>
+                      <strong>
+                        {s.schoolClass.name} · {s.name}
+                      </strong>
+                    </td>
+                    <td>{s._count.enrollments} students</td>
+                    <td>
+                      <div className="progress-line">
+                        <span style={{ width: `${(s._count.enrollments / s.capacity) * 100}%` }} />
+                      </div>
+                    </td>
+                    <td>
+                      <Badge>Active</Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+        <Panel title="Around your campus" subtitle="The latest little steps forward">
+          <div className="activity-list">
+            {d.activity.slice(0, 4).map((a: any) => (
+              <div className="activity-row" key={a.id}>
+                <div className="activity-dot" />
+                <div>
+                  <p>
+                    {a.action.replaceAll('_', ' ').toLowerCase()} · {a.entity}
+                  </p>
+                  <time>{displayDate(a.createdAt)}</time>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Panel>
+      </div>
+    </>
+  );
 }

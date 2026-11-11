@@ -1,7 +1,78 @@
 import Link from 'next/link';
 import { BookOpen, ClipboardCheck, GraduationCap, Megaphone, Users, Wallet } from 'lucide-react';
 import { PageTitle, Panel } from '@/components/ui';
-export default function Help(){
-  const guides=[{icon:Users,title:'Welcome a student',body:'Use Admissions to review an application, enter test scores, generate a merit list, and offer a seat. Copy the private acceptance link for the family. A confirmed seat creates the student and an admission invoice.',href:'/admissions'}, {icon:ClipboardCheck,title:'Keep the daily register',body:'Choose a class, day, and period in Attendance. Mark the register or import the provided CSV template, then save. Full-day absence messages wait 30 minutes and skip approved leave.',href:'/attendance'}, {icon:Wallet,title:'Keep your accounts clear',body:'Create a class fee structure, generate invoices for a due month, and record a payment. Payments settle the oldest open invoices first. Download a receipt from Payments. Waivers require a different staff member’s approval.',href:'/fees'}, {icon:GraduationCap,title:'Publish with confidence',body:'Create an exam term, open entry, and save marks for every assigned subject. Lock entry, move to moderation, then publish. Guardians see published results only. The Principal can unlock a term before publication.',href:'/exams'}, {icon:Megaphone,title:'Share the right update',body:'Compose a notice in English and optional Bangla. Choose a class or the whole campus, then save a draft or queue it. The delivery worker runs every minute. The SMS log distinguishes simulated messages from sent messages.',href:'/notices'}, {icon:BookOpen,title:'Plan the next session',body:'Create a planned session and its sections. Promote students before closing the source session, choosing whether to carry unpaid dues. A closed session becomes read-only. Activating a new session closes the previous active session.',href:'/academics'}];
-  return <><PageTitle title="A little guidance goes a long way." eyebrow="CAMPUS ONE HELP CENTER" description="Practical guides for the everyday work of your school."/><div className="cards-list">{guides.map(g=><Panel key={g.title} className="record-card"><div className="stat-icon green"><g.icon size={21}/></div><h3>{g.title}</h3><p>{g.body}</p><Link className="button ghost" href={g.href}>Open workspace →</Link></Panel>)}</div><div className="section-space"><Panel title="Need a hand signing in?" subtitle="Your campus administrator can provision your account. Keep your password private."><p style={{padding:'0 24px 24px'}}>Campus access and actions depend on the roles assigned to your account. Select your campus in the top bar. Families see only linked learners. Contact your school office if a child or campus is missing.</p></Panel></div></>;
+export default function Help() {
+  const guides = [
+    {
+      icon: Users,
+      title: 'Welcome a student',
+      body: 'Use Admissions to review an application, enter test scores, generate a merit list, and offer a seat. Copy the private acceptance link for the family. A confirmed seat creates the student and an admission invoice.',
+      href: '/admissions',
+    },
+    {
+      icon: ClipboardCheck,
+      title: 'Keep the daily register',
+      body: 'Choose a class, day, and period in Attendance. Mark the register or import the provided CSV template, then save. Full-day absence messages wait 30 minutes and skip approved leave.',
+      href: '/attendance',
+    },
+    {
+      icon: Wallet,
+      title: 'Keep your accounts clear',
+      body: 'Create a class fee structure, generate invoices for a due month, and record a payment. Payments settle the oldest open invoices first. Download a receipt from Payments. Waivers require a different staff member’s approval.',
+      href: '/fees',
+    },
+    {
+      icon: GraduationCap,
+      title: 'Publish with confidence',
+      body: 'Create an exam term, open entry, and save marks for every assigned subject. Lock entry, move to moderation, then publish. Guardians see published results only. The Principal can unlock a term before publication.',
+      href: '/exams',
+    },
+    {
+      icon: Megaphone,
+      title: 'Share the right update',
+      body: 'Compose a notice in English and optional Bangla. Choose a class or the whole campus, then save a draft or queue it. The delivery worker runs every minute. The SMS log distinguishes simulated messages from sent messages.',
+      href: '/notices',
+    },
+    {
+      icon: BookOpen,
+      title: 'Plan the next session',
+      body: 'Create a planned session and its sections. Promote students before closing the source session, choosing whether to carry unpaid dues. A closed session becomes read-only. Activating a new session closes the previous active session.',
+      href: '/academics',
+    },
+  ];
+  return (
+    <>
+      <PageTitle
+        title="A little guidance goes a long way."
+        eyebrow="CAMPUS ONE HELP CENTER"
+        description="Practical guides for the everyday work of your school."
+      />
+      <div className="cards-list">
+        {guides.map((g) => (
+          <Panel key={g.title} className="record-card">
+            <div className="stat-icon green">
+              <g.icon size={21} />
+            </div>
+            <h3>{g.title}</h3>
+            <p>{g.body}</p>
+            <Link className="button ghost" href={g.href}>
+              Open workspace →
+            </Link>
+          </Panel>
+        ))}
+      </div>
+      <div className="section-space">
+        <Panel
+          title="Need a hand signing in?"
+          subtitle="Your campus administrator can provision your account. Keep your password private."
+        >
+          <p style={{ padding: '0 24px 24px' }}>
+            Campus access and actions depend on the roles assigned to your account. Select your
+            campus in the top bar. Families see only linked learners. Contact your school office if
+            a child or campus is missing.
+          </p>
+        </Panel>
+      </div>
+    </>
+  );
 }
