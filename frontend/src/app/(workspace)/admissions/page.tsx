@@ -17,7 +17,7 @@ import {
 import { useData } from '@/lib/use-data';
 import { csvDownload, post } from '@/lib/api';
 export default function Admissions() {
-  const { sessionId } = useCampus(),
+  const { sessionId, organization } = useCampus(),
     { data, error, loading, reload } = useData('admissions/applications'),
     { data: sections } = useData(sessionId ? `sections?sessionId=${sessionId}` : null),
     { data: classes } = useData('classes');
@@ -53,7 +53,10 @@ export default function Admissions() {
           <ListOrdered size={16} />
           Generate merit list
         </Button>
-        <Link href="/apply" className="button primary">
+        <Link
+          href={`/apply?school=${encodeURIComponent(organization?.slug || 'scholars')}`}
+          className="button primary"
+        >
           <Plus size={17} />
           New application
         </Link>

@@ -7,7 +7,15 @@ import { Button, State } from '@/components/ui';
 import { post } from '@/lib/api';
 import { useData } from '@/lib/use-data';
 export default function Apply() {
-  const { data: campuses, error, loading } = useData('admissions/options');
+  const school =
+    typeof window === 'undefined'
+      ? 'scholars'
+      : new URLSearchParams(window.location.search).get('school') || 'scholars';
+  const {
+    data: campuses,
+    error,
+    loading,
+  } = useData(`admissions/options?school=${encodeURIComponent(school)}`);
   const [campusId, setCampus] = useState(''),
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState(''),

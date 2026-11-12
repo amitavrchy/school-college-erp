@@ -1,25 +1,669 @@
 'use client';
 import Link from 'next/link';
 import { useState } from 'react';
-import { ArrowRight,ArrowUpRight,BookOpen,Building2,Check,CheckCheck,ChevronDown,ClipboardCheck,CreditCard,GraduationCap,Heart,Library,Menu,MessageCircle,Plus,ShieldCheck,Sparkles,Users,Wallet,X,Bus,NotebookPen,LockKeyhole,CalendarDays } from 'lucide-react';
+import {
+  ArrowRight,
+  ArrowUpRight,
+  BookOpen,
+  Building2,
+  Check,
+  CheckCheck,
+  ChevronDown,
+  ClipboardCheck,
+  CreditCard,
+  GraduationCap,
+  Heart,
+  Library,
+  Menu,
+  MessageCircle,
+  Plus,
+  ShieldCheck,
+  Sparkles,
+  Users,
+  Wallet,
+  X,
+  Bus,
+  NotebookPen,
+  LockKeyhole,
+  CalendarDays,
+} from 'lucide-react';
 import { useData } from '@/lib/use-data';
-import { bdt,number } from '@/lib/api';
+import { bdt, number } from '@/lib/api';
 import '@/app/landing.css';
-const personas=[
-  {name:'School leaders',title:'The whole picture. Finally.',body:'Move between campuses, follow admissions, see attendance and collections, and make decisions with the context you need.',icon:Building2,rows:[['Admission review','12 applications','mint'],['Daily attendance','Ready for review','gold'],['Fee collection','Ledger updated','blue']]},
-  {name:'Teachers',title:'More teaching. Less chasing.',body:'Take attendance, share thoughtful assignments, give feedback, and publish results through a careful moderation workflow.',icon:NotebookPen,rows:[['Class 6 · English','Assignment posted','blue'],['Class register','Saved for today','mint'],['Annual examination','Marks entry open','gold']]},
-  {name:'Families',title:'Be part of their every day.',body:'A personal view of your children’s attendance, published results, fees, homework and school transport. Only the records your family is linked to.',icon:Heart,rows:[['Recent attendance','Your child’s record','mint'],['School transport','Boarding updates','gold'],['Published results','Report card ready','blue']]},
+const personas = [
+  {
+    name: 'School leaders',
+    title: 'The whole picture. Finally.',
+    body: 'Move between campuses, follow admissions, see attendance and collections, and make decisions with the context you need.',
+    icon: Building2,
+    rows: [
+      ['Admission review', '12 applications', 'mint'],
+      ['Daily attendance', 'Ready for review', 'gold'],
+      ['Fee collection', 'Ledger updated', 'blue'],
+    ],
+  },
+  {
+    name: 'Teachers',
+    title: 'More teaching. Less chasing.',
+    body: 'Take attendance, share thoughtful assignments, give feedback, and publish results through a careful moderation workflow.',
+    icon: NotebookPen,
+    rows: [
+      ['Class 6 · English', 'Assignment posted', 'blue'],
+      ['Class register', 'Saved for today', 'mint'],
+      ['Annual examination', 'Marks entry open', 'gold'],
+    ],
+  },
+  {
+    name: 'Families',
+    title: 'Be part of their every day.',
+    body: 'A personal view of your children’s attendance, published results, fees, homework and school transport. Only the records your family is linked to.',
+    icon: Heart,
+    rows: [
+      ['Recent attendance', 'Your child’s record', 'mint'],
+      ['School transport', 'Boarding updates', 'gold'],
+      ['Published results', 'Report card ready', 'blue'],
+    ],
+  },
 ];
-function Brand(){return <Link className="lp-brand" href="/" aria-label="Campus One home"><img src="/brand.svg" alt="" width={39} height={39}/><span>campus<span>one</span><i>FOR A BETTER SCHOOL DAY</i></span></Link>;}
-function Preview(){return <div className="lp-product" aria-label="Illustrative Campus One dashboard preview"><div className="lp-window"><div><i/><i/><i/></div><span><LockKeyhole size={12}/> your institution · Campus One</span><span className="lp-demo-tag">PREVIEW</span></div><div className="lp-product-body"><aside><img src="/brand.svg" width={27} height={27} alt=""/><span className="lp-mini-active"><Building2 size={17}/></span><Users size={17}/><ClipboardCheck size={17}/><BookOpen size={17}/><Wallet size={17}/><Library size={17}/><Bus size={17}/></aside><div className="lp-product-content"><div className="lp-mini-heading"><span>YOUR CAMPUS, CONNECTED</span><div><span className="lp-mini-avatar">AR</span></div></div><h3>A good day to grow.</h3><p>Every learner. Every possibility. One place.</p><div className="lp-mini-welcome"><div><span>LET’S MAKE TODAY COUNT</span><h4>Welcome to your workspace.</h4><p>A clearer view of everything that matters.</p></div><GraduationCap size={58} strokeWidth={1}/></div><div className="lp-mini-stats">{[['Students',Users,'Your community'],['Attendance',ClipboardCheck,'Every presence'],['Fees',Wallet,'Clearer accounts']].map(([label,Icon,note]:any)=><div key={label}><Icon size={17}/><span>{label}</span><strong>{note}</strong></div>)}</div><div className="lp-mini-grid"><div className="lp-mini-chart"><h4>A little more clarity.</h4><p>Your campus at a glance</p><div className="lp-chart-bars">{[33,55,42,70,62,83,74,95,86,100].map((h,i)=><i key={i} style={{height:`${h}%`}}/>)}</div><span>Illustrative fee collection view</span></div><div className="lp-mini-register"><div><span className="lp-round-icon"><CheckCheck size={24}/></span><strong>All in a day’s work.</strong><p>From the first bell to the last lesson.</p></div><span className="lp-mini-pill"><span/> Campus, in sync</span></div></div></div></div></div>;}
-export default function Landing(){
-  const [mobile,setMobile]=useState(false),[persona,setPersona]=useState(0),[yearly,setYearly]=useState(false);
-  const {data:plans,error}=useData('saas/plans');const selected=personas[persona];
-  return <div className="landing"><a href="#landing-main" className="skip-link">Skip to content</a><header className="lp-nav"><div className="lp-container lp-nav-inner"><Brand/><nav aria-label="Main navigation" className={mobile?'lp-nav-links open':'lp-nav-links'}>{[['The platform','#platform'],['For your people','#people'],['Pricing','#pricing'],['Questions','#questions']].map(([label,href])=><a href={href} key={href} onClick={()=>setMobile(false)}>{label}</a>)}</nav><div className="lp-nav-actions"><Link href="/login" className="lp-login">Log in <ArrowUpRight size={15}/></Link><Link href="/start" className="lp-button lp-button-dark">Start your campus <ArrowRight size={16}/></Link><button className="lp-mobile-toggle" aria-label={mobile?'Close menu':'Open menu'} aria-expanded={mobile} onClick={()=>setMobile(!mobile)}>{mobile?<X/>:<Menu/>}</button></div></div></header><main id="landing-main"><section className="lp-hero lp-container"><div className="lp-hero-copy"><div className="lp-kicker"><span/> LESS ADMIN. MORE POSSIBILITY.</div><h1>A school day,<br/>beautifully<br/><em>in sync.</em><span className="lp-asterisk">✳</span></h1><p>Behind every great school is a thousand moving parts. Bring them together in one thoughtful workspace—and make room for what matters.</p><div className="lp-hero-actions"><Link href="/start" className="lp-button lp-button-dark lp-button-large">Start your 14-day trial <ArrowUpRight size={19}/></Link><a href="#platform" className="lp-text-link">Take a closer look <ArrowRight size={18}/></a></div><div className="lp-hero-notes"><span><Check size={15}/> No card required</span><span><Check size={15}/> Your own institution workspace</span></div></div><div className="lp-hero-visual"><div className="lp-orbit lp-orbit-one"/><div className="lp-orbit lp-orbit-two"/><div className="lp-floating-note lp-note-one"><div className="lp-note-icon"><Heart size={20}/></div><div><strong>A little more connected.</strong><span>School, teachers & families</span></div></div><Preview/><div className="lp-floating-note lp-note-two"><span className="lp-note-check"><Check size={19}/></span><div><strong>Room for every possibility.</strong><span>One platform. Your whole campus.</span></div><Sparkles size={19}/></div><span className="lp-visual-caption">An illustrative glimpse inside your next workspace.</span></div></section><section className="lp-proof"><div className="lp-container"><p>BUILT AROUND YOUR REAL SCHOOL DAY</p><div>{[[Building2,'Independent tenant workspaces'],[CreditCard,'bKash & Nagad reference review'],[ShieldCheck,'Roles & access boundaries'],[Users,'Made for your whole community']].map(([Icon,label]:any)=><span key={label}><Icon size={21} strokeWidth={1.5}/>{label}</span>)}</div></div></section><section id="platform" className="lp-container lp-section"><div className="lp-section-heading"><div><div className="lp-eyebrow">ONE CAMPUS. ALL THE CONNECTIONS.</div><h2>Less scattered.<br/><em>More together.</em></h2></div><p>Give the everyday work of your institution a place to belong. Connected workflows, clear responsibilities, and a little breathing room.</p></div><div className="lp-bento"><article className="lp-bento-academic"><div className="lp-feature-icon"><GraduationCap size={26}/></div><div className="lp-feature-label">ACADEMICS, WITH CLARITY</div><h3>From their first hello<br/>to their next big step.</h3><p>Admissions, merit lists, enrollment, attendance, homework and moderated results. A learner’s journey, connected from the start.</p><div className="lp-journey">{[['Apply',Users],['Learn',BookOpen],['Grow',GraduationCap]].map(([label,Icon]:any,i)=><div key={label}><span>0{i+1}</span><Icon size={25}/><strong>{label}</strong>{i<2&&<ArrowRight className="lp-journey-arrow" size={20}/>}</div>)}</div></article><article className="lp-bento-finance"><Wallet size={28}/><div className="lp-feature-label">ACCOUNTS, IN ORDER</div><h3>A clearer ledger.<br/>A lighter head.</h3><p>Invoices, partial payments, scholarships, approved waivers and downloadable receipts. Every amount has a place.</p><div className="lp-ledger"><div><span>Tuition invoice</span><strong>Recorded</strong></div><div><span>Partial payment</span><span className="lp-ledger-status"><Check size={14}/> Allocated FIFO</span></div><div><span>Outstanding balance</span><strong>Always visible <ArrowUpRight size={14}/></strong></div></div></article><article className="lp-bento-small"><div className="lp-feature-icon gold"><Library size={25}/></div><h3>Good books.<br/>Great possibilities.</h3><p>A real library circulation desk: available copies, loans, reservation queues and overdue fines connected to the fee ledger.</p><span className="lp-feature-foot">LIBRARY & CIRCULATION <ArrowUpRight size={17}/></span></article><article className="lp-bento-small lp-transport-card"><div className="lp-feature-icon blue"><Bus size={25}/></div><h3>From the doorstep,<br/>safely.</h3><p>Routes, stops, vehicle capacity and recorded boarding/drop-off updates—so the journey is part of the school day too.</p><span className="lp-feature-foot">TRANSPORT OPERATIONS <ArrowUpRight size={17}/></span></article><article className="lp-bento-small"><div className="lp-feature-icon pink"><MessageCircle size={25}/></div><h3>A conversation,<br/>kept connected.</h3><p>Bangla and English notices, family updates and support requests with priorities, response targets and a clear history.</p><span className="lp-feature-foot">COMMUNICATION & SUPPORT <ArrowUpRight size={17}/></span></article></div></section><section id="people" className="lp-people"><div className="lp-container lp-people-grid"><div><div className="lp-eyebrow">ONE COMMUNITY. DIFFERENT EVERYDAYS.</div><h2>Built for the people<br/><em>who make it happen.</em></h2><div className="lp-persona-tabs" role="tablist" aria-label="Explore by role">{personas.map((p,i)=><button role="tab" aria-selected={persona===i} key={p.name} onClick={()=>setPersona(i)}>{p.name}</button>)}</div><div className="lp-persona-copy" key={persona}><h3>{selected.title}</h3><p>{selected.body}</p><Link href="/start" className="lp-text-link">Find your better school day <ArrowUpRight size={17}/></Link></div></div><div className="lp-people-preview" role="tabpanel"><div className="lp-persona-heading"><span className="lp-feature-icon"><selected.icon size={25}/></span><div><span>YOUR DAILY WORKSPACE</span><h3>{selected.name}</h3></div><span className="lp-preview-label">Preview</span></div>{selected.rows.map(([title,status,color],i)=><div className="lp-persona-row" key={title}><span>0{i+1}</span><div><strong>{title}</strong><span>Connected to your campus</span></div><i className={color}>{status}</i></div>)}<div className="lp-people-bottom"><ShieldCheck size={19}/><p>The right access, for the right people.</p></div></div></div></section><section className="lp-container lp-security"><div className="lp-security-symbol"><ShieldCheck size={44} strokeWidth={1.3}/></div><div><div className="lp-eyebrow">YOUR INSTITUTION. YOUR OWN SPACE.</div><h3>Connected within. Separate by design.</h3><p>Each institution gets its own workspace, membership and subscription. Campus permissions, linked-family access, encrypted admission documents and logged approvals protect the boundaries that matter.</p></div><Link href="/start" className="lp-round-arrow" aria-label="Create your institution workspace"><ArrowUpRight size={27}/></Link></section><section id="pricing" className="lp-container lp-section lp-pricing"><div className="lp-center-heading"><div className="lp-eyebrow">A PLAN FOR YOUR NEXT CHAPTER</div><h2>Start small.<br/><em>Leave room to grow.</em></h2><p>One subscription for your institution. Clear limits. No card needed for your 14-day trial.</p><div className="lp-price-toggle"><button className={!yearly?'selected':''} onClick={()=>setYearly(false)}>Monthly</button><button className={yearly?'selected':''} onClick={()=>setYearly(true)}>Yearly</button></div></div><div className="lp-pricing-grid">{plans?.map((plan:any)=><article key={plan.id} className={`lp-price-card ${plan.code==='GROWTH'?'featured':''}`}>{plan.code==='GROWTH'&&<span className="lp-price-recommend">A LITTLE MORE ROOM TO GROW</span>}<div className="lp-price-plan">{plan.name}</div><p>{plan.description}</p><div className="lp-price"><strong>{bdt(yearly?Math.round(plan.annualMinor/12):plan.monthlyMinor)}</strong><span>/ month</span></div><p className="lp-billed">{yearly?`${bdt(plan.annualMinor)} billed yearly`:'Billed monthly'} · per institution</p><Link className={`lp-button ${plan.code==='GROWTH'?'lp-button-dark':'lp-button-outline'}`} href={`/start?plan=${plan.code}&period=${yearly?'YEARLY':'MONTHLY'}`}>Start with {plan.name} <ArrowUpRight size={17}/></Link><div className="lp-plan-divider"/><ul>{[`${number(plan.maxStudents)} student records`,`${plan.maxCampuses} campus${plan.maxCampuses>1?'es':''}`,`${plan.maxStaff} staff accounts`,'Academics, fees & guardian portal',...(plan.features.includes('homework')?['Homework & feedback']:[]),...(plan.features.includes('library')?['Library circulation']:[]),...(plan.features.includes('transport')?['Transport operations']:[]),'Support request tracking'].map(f=><li key={f}><Check size={16}/>{f}</li>)}</ul></article>)}</div>{error&&<p role="alert">Pricing could not load. Please <a href="#pricing" onClick={()=>window.location.reload()}>try again</a>.</p>}<div className="lp-payment-note"><CreditCard size={21}/><p>Prefer bKash, Nagad or a bank transfer? Submit your transaction reference. Your subscription activates after the platform team reviews the payment. Manual activation is available too.</p></div></section><section id="questions" className="lp-container lp-faq"><div><div className="lp-eyebrow">A LITTLE MORE CLARITY</div><h2>Good questions.<br/><em>Clear answers.</em></h2><p>A few things you might be wondering before your next chapter.</p><Link href="/start" className="lp-text-link">Let’s get you started <ArrowUpRight size={17}/></Link></div><div>{[
-  ['Is every school a separate tenant?','Yes. Each institution has its own organization, campus memberships, subscription and access rules. A user must hold the appropriate membership and campus role to access an institution’s records.'],
-  ['How do bKash and Nagad subscriptions work?','Send the displayed plan amount to the configured receiving account and submit your sender number and transaction reference. The platform administrator checks the received funds and approves or rejects the request. A reference alone does not activate a plan.'],
-  ['What happens after my trial?','Renew using a monthly or yearly plan. If the subscription expires, core records remain available in read-only mode while your institution owner arranges renewal.'],
-  ['Can parents and students use it on a phone?','Yes. The workspace is responsive. Families see only their linked students, published results, notices, fees and enabled family modules. Staff controls stay with authorized staff.'],
-  ['Can I start with one campus and add more later?','Yes. Choose a plan with the campus, student and staff capacity you need. The platform checks those limits when records are added and when a subscription is approved.'],
-].map(([q,a])=><details key={q}><summary>{q}<Plus size={20}/></summary><p>{a}</p></details>)}</div></section><section className="lp-final"><div className="lp-container"><span className="lp-final-spark">✳</span><div className="lp-eyebrow">A BETTER EVERY DAY BEGINS WITH ONE STEP.</div><h2>Make room for<br/><em>what matters.</em></h2><p>Your people. Your possibilities. Your connected campus.</p><Link href="/start" className="lp-button lp-button-lime lp-button-large">Start your campus <ArrowUpRight size={20}/></Link><span className="lp-final-note">14 days to explore. No card required.</span></div></section></main><footer className="lp-footer lp-container"><div><Brand/><p>For the people behind every brighter school day.</p></div><div><a href="#platform">The platform</a><a href="#pricing">Pricing</a><a href="#questions">Questions</a><Link href="/login">Workspace login</Link></div><div className="lp-footer-bottom"><span>© {new Date().getFullYear()} Campus One</span><span>Thoughtfully built for Bangladesh <span>↗</span></span></div></footer></div>;
+function Brand() {
+  return (
+    <Link className="lp-brand" href="/">
+      <img src="/brand.svg" alt="" width={39} height={39} />
+      <span>
+        campus<span>one</span>
+        <i>FOR A BETTER SCHOOL DAY</i>
+      </span>
+    </Link>
+  );
+}
+function Preview() {
+  return (
+    <div className="lp-product" aria-label="Illustrative Campus One dashboard preview">
+      <div className="lp-window">
+        <div>
+          <i />
+          <i />
+          <i />
+        </div>
+        <span>
+          <LockKeyhole size={12} /> your institution · Campus One
+        </span>
+        <span className="lp-demo-tag">PREVIEW</span>
+      </div>
+      <div className="lp-product-body">
+        <aside>
+          <img src="/brand.svg" width={27} height={27} alt="" />
+          <span className="lp-mini-active">
+            <Building2 size={17} />
+          </span>
+          <Users size={17} />
+          <ClipboardCheck size={17} />
+          <BookOpen size={17} />
+          <Wallet size={17} />
+          <Library size={17} />
+          <Bus size={17} />
+        </aside>
+        <div className="lp-product-content">
+          <div className="lp-mini-heading">
+            <span>YOUR CAMPUS, CONNECTED</span>
+            <div>
+              <span className="lp-mini-avatar">AR</span>
+            </div>
+          </div>
+          <h3>A good day to grow.</h3>
+          <p>Every learner. Every possibility. One place.</p>
+          <div className="lp-mini-welcome">
+            <div>
+              <span>LET’S MAKE TODAY COUNT</span>
+              <h4>Welcome to your workspace.</h4>
+              <p>A clearer view of everything that matters.</p>
+            </div>
+            <GraduationCap size={58} strokeWidth={1} />
+          </div>
+          <div className="lp-mini-stats">
+            {[
+              ['Students', Users, 'Your community'],
+              ['Attendance', ClipboardCheck, 'Every presence'],
+              ['Fees', Wallet, 'Clearer accounts'],
+            ].map(([label, Icon, note]: any) => (
+              <div key={label}>
+                <Icon size={17} />
+                <span>{label}</span>
+                <strong>{note}</strong>
+              </div>
+            ))}
+          </div>
+          <div className="lp-mini-grid">
+            <div className="lp-mini-chart">
+              <h4>A little more clarity.</h4>
+              <p>Your campus at a glance</p>
+              <div className="lp-chart-bars">
+                {[33, 55, 42, 70, 62, 83, 74, 95, 86, 100].map((h, i) => (
+                  <i key={i} style={{ height: `${h}%` }} />
+                ))}
+              </div>
+              <span>Illustrative fee collection view</span>
+            </div>
+            <div className="lp-mini-register">
+              <div>
+                <span className="lp-round-icon">
+                  <CheckCheck size={24} />
+                </span>
+                <strong>All in a day’s work.</strong>
+                <p>From the first bell to the last lesson.</p>
+              </div>
+              <span className="lp-mini-pill">
+                <span /> Campus, in sync
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+export default function Landing() {
+  const [mobile, setMobile] = useState(false),
+    [persona, setPersona] = useState(0),
+    [yearly, setYearly] = useState(false);
+  const { data: plans, error } = useData('saas/plans');
+  const selected = personas[persona];
+  return (
+    <div className="landing">
+      <a href="#landing-main" className="skip-link">
+        Skip to content
+      </a>
+      <header className="lp-nav">
+        <div className="lp-container lp-nav-inner">
+          <Brand />
+          <nav
+            aria-label="Main navigation"
+            className={mobile ? 'lp-nav-links open' : 'lp-nav-links'}
+          >
+            {[
+              ['The platform', '#platform'],
+              ['For your people', '#people'],
+              ['Pricing', '#pricing'],
+              ['Questions', '#questions'],
+            ].map(([label, href]) => (
+              <a href={href} key={href} onClick={() => setMobile(false)}>
+                {label}
+              </a>
+            ))}
+          </nav>
+          <div className="lp-nav-actions">
+            <Link href="/login" className="lp-login">
+              Log in <ArrowUpRight size={15} />
+            </Link>
+            <Link href="/start" className="lp-button lp-button-dark">
+              Start your campus <ArrowRight size={16} />
+            </Link>
+            <button
+              className="lp-mobile-toggle"
+              aria-label={mobile ? 'Close menu' : 'Open menu'}
+              aria-expanded={mobile}
+              onClick={() => setMobile(!mobile)}
+            >
+              {mobile ? <X /> : <Menu />}
+            </button>
+          </div>
+        </div>
+      </header>
+      <main id="landing-main">
+        <section className="lp-hero lp-container">
+          <div className="lp-hero-copy">
+            <div className="lp-kicker">
+              <span /> LESS ADMIN. MORE POSSIBILITY.
+            </div>
+            <h1>
+              A school day,
+              <br />
+              beautifully
+              <br />
+              <em>in sync.</em>
+              <span className="lp-asterisk">✳</span>
+            </h1>
+            <p>
+              Behind every great school is a thousand moving parts. Bring them together in one
+              thoughtful workspace—and make room for what matters.
+            </p>
+            <div className="lp-hero-actions">
+              <Link href="/start" className="lp-button lp-button-dark lp-button-large">
+                Start your 14-day trial <ArrowUpRight size={19} />
+              </Link>
+              <a href="#platform" className="lp-text-link">
+                Take a closer look <ArrowRight size={18} />
+              </a>
+            </div>
+            <div className="lp-hero-notes">
+              <span>
+                <Check size={15} /> No card required
+              </span>
+              <span>
+                <Check size={15} /> Your own institution workspace
+              </span>
+            </div>
+          </div>
+          <div className="lp-hero-visual">
+            <div className="lp-orbit lp-orbit-one" />
+            <div className="lp-orbit lp-orbit-two" />
+            <div className="lp-floating-note lp-note-one">
+              <div className="lp-note-icon">
+                <Heart size={20} />
+              </div>
+              <div>
+                <strong>A little more connected.</strong>
+                <span>School, teachers & families</span>
+              </div>
+            </div>
+            <Preview />
+            <div className="lp-floating-note lp-note-two">
+              <span className="lp-note-check">
+                <Check size={19} />
+              </span>
+              <div>
+                <strong>Room for every possibility.</strong>
+                <span>One platform. Your whole campus.</span>
+              </div>
+              <Sparkles size={19} />
+            </div>
+            <span className="lp-visual-caption">
+              An illustrative glimpse inside your next workspace.
+            </span>
+          </div>
+        </section>
+        <section className="lp-proof">
+          <div className="lp-container">
+            <p>BUILT AROUND YOUR REAL SCHOOL DAY</p>
+            <div>
+              {[
+                [Building2, 'Independent tenant workspaces'],
+                [CreditCard, 'bKash & Nagad reference review'],
+                [ShieldCheck, 'Roles & access boundaries'],
+                [Users, 'Made for your whole community'],
+              ].map(([Icon, label]: any) => (
+                <span key={label}>
+                  <Icon size={21} strokeWidth={1.5} />
+                  {label}
+                </span>
+              ))}
+            </div>
+          </div>
+        </section>
+        <section id="platform" className="lp-container lp-section">
+          <div className="lp-section-heading">
+            <div>
+              <div className="lp-eyebrow">ONE CAMPUS. ALL THE CONNECTIONS.</div>
+              <h2>
+                Less scattered.
+                <br />
+                <em>More together.</em>
+              </h2>
+            </div>
+            <p>
+              Give the everyday work of your institution a place to belong. Connected workflows,
+              clear responsibilities, and a little breathing room.
+            </p>
+          </div>
+          <div className="lp-bento">
+            <article className="lp-bento-academic">
+              <div className="lp-feature-icon">
+                <GraduationCap size={26} />
+              </div>
+              <div className="lp-feature-label">ACADEMICS, WITH CLARITY</div>
+              <h3>
+                From their first hello
+                <br />
+                to their next big step.
+              </h3>
+              <p>
+                Admissions, merit lists, enrollment, attendance, homework and moderated results. A
+                learner’s journey, connected from the start.
+              </p>
+              <div className="lp-journey">
+                {[
+                  ['Apply', Users],
+                  ['Learn', BookOpen],
+                  ['Grow', GraduationCap],
+                ].map(([label, Icon]: any, i) => (
+                  <div key={label}>
+                    <span>0{i + 1}</span>
+                    <Icon size={25} />
+                    <strong>{label}</strong>
+                    {i < 2 && <ArrowRight className="lp-journey-arrow" size={20} />}
+                  </div>
+                ))}
+              </div>
+            </article>
+            <article className="lp-bento-finance">
+              <Wallet size={28} />
+              <div className="lp-feature-label">ACCOUNTS, IN ORDER</div>
+              <h3>
+                A clearer ledger.
+                <br />A lighter head.
+              </h3>
+              <p>
+                Invoices, partial payments, scholarships, approved waivers and downloadable
+                receipts. Every amount has a place.
+              </p>
+              <div className="lp-ledger">
+                <div>
+                  <span>Tuition invoice</span>
+                  <strong>Recorded</strong>
+                </div>
+                <div>
+                  <span>Partial payment</span>
+                  <span className="lp-ledger-status">
+                    <Check size={14} /> Allocated FIFO
+                  </span>
+                </div>
+                <div>
+                  <span>Outstanding balance</span>
+                  <strong>
+                    Always visible <ArrowUpRight size={14} />
+                  </strong>
+                </div>
+              </div>
+            </article>
+            <article className="lp-bento-small">
+              <div className="lp-feature-icon gold">
+                <Library size={25} />
+              </div>
+              <h3>
+                Good books.
+                <br />
+                Great possibilities.
+              </h3>
+              <p>
+                A real library circulation desk: available copies, loans, reservation queues and
+                overdue fines connected to the fee ledger.
+              </p>
+              <span className="lp-feature-foot">
+                LIBRARY & CIRCULATION <ArrowUpRight size={17} />
+              </span>
+            </article>
+            <article className="lp-bento-small lp-transport-card">
+              <div className="lp-feature-icon blue">
+                <Bus size={25} />
+              </div>
+              <h3>
+                From the doorstep,
+                <br />
+                safely.
+              </h3>
+              <p>
+                Routes, stops, vehicle capacity and recorded boarding/drop-off updates—so the
+                journey is part of the school day too.
+              </p>
+              <span className="lp-feature-foot">
+                TRANSPORT OPERATIONS <ArrowUpRight size={17} />
+              </span>
+            </article>
+            <article className="lp-bento-small">
+              <div className="lp-feature-icon pink">
+                <MessageCircle size={25} />
+              </div>
+              <h3>
+                A conversation,
+                <br />
+                kept connected.
+              </h3>
+              <p>
+                Bangla and English notices, family updates and support requests with priorities,
+                response targets and a clear history.
+              </p>
+              <span className="lp-feature-foot">
+                COMMUNICATION & SUPPORT <ArrowUpRight size={17} />
+              </span>
+            </article>
+          </div>
+        </section>
+        <section id="people" className="lp-people">
+          <div className="lp-container lp-people-grid">
+            <div>
+              <div className="lp-eyebrow">ONE COMMUNITY. DIFFERENT EVERYDAYS.</div>
+              <h2>
+                Built for the people
+                <br />
+                <em>who make it happen.</em>
+              </h2>
+              <div className="lp-persona-tabs" role="tablist" aria-label="Explore by role">
+                {personas.map((p, i) => (
+                  <button
+                    role="tab"
+                    aria-selected={persona === i}
+                    key={p.name}
+                    onClick={() => setPersona(i)}
+                  >
+                    {p.name}
+                  </button>
+                ))}
+              </div>
+              <div className="lp-persona-copy" key={persona}>
+                <h3>{selected.title}</h3>
+                <p>{selected.body}</p>
+                <Link href="/start" className="lp-text-link">
+                  Find your better school day <ArrowUpRight size={17} />
+                </Link>
+              </div>
+            </div>
+            <div className="lp-people-preview" role="tabpanel">
+              <div className="lp-persona-heading">
+                <span className="lp-feature-icon">
+                  <selected.icon size={25} />
+                </span>
+                <div>
+                  <span>YOUR DAILY WORKSPACE</span>
+                  <h3>{selected.name}</h3>
+                </div>
+                <span className="lp-preview-label">Preview</span>
+              </div>
+              {selected.rows.map(([title, status, color], i) => (
+                <div className="lp-persona-row" key={title}>
+                  <span>0{i + 1}</span>
+                  <div>
+                    <strong>{title}</strong>
+                    <span>Connected to your campus</span>
+                  </div>
+                  <i className={color}>{status}</i>
+                </div>
+              ))}
+              <div className="lp-people-bottom">
+                <ShieldCheck size={19} />
+                <p>The right access, for the right people.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section className="lp-container lp-security">
+          <div className="lp-security-symbol">
+            <ShieldCheck size={44} strokeWidth={1.3} />
+          </div>
+          <div>
+            <div className="lp-eyebrow">YOUR INSTITUTION. YOUR OWN SPACE.</div>
+            <h3>Connected within. Separate by design.</h3>
+            <p>
+              Each institution gets its own workspace, membership and subscription. Campus
+              permissions, linked-family access, encrypted admission documents and logged approvals
+              protect the boundaries that matter.
+            </p>
+          </div>
+          <Link
+            href="/start"
+            className="lp-round-arrow"
+            aria-label="Create your institution workspace"
+          >
+            <ArrowUpRight size={27} />
+          </Link>
+        </section>
+        <section id="pricing" className="lp-container lp-section lp-pricing">
+          <div className="lp-center-heading">
+            <div className="lp-eyebrow">A PLAN FOR YOUR NEXT CHAPTER</div>
+            <h2>
+              Start small.
+              <br />
+              <em>Leave room to grow.</em>
+            </h2>
+            <p>
+              One subscription for your institution. Clear limits. No card needed for your 14-day
+              trial.
+            </p>
+            <div className="lp-price-toggle">
+              <button className={!yearly ? 'selected' : ''} onClick={() => setYearly(false)}>
+                Monthly
+              </button>
+              <button className={yearly ? 'selected' : ''} onClick={() => setYearly(true)}>
+                Yearly
+              </button>
+            </div>
+          </div>
+          <div className="lp-pricing-grid">
+            {plans?.map((plan: any) => (
+              <article
+                key={plan.id}
+                className={`lp-price-card ${plan.code === 'GROWTH' ? 'featured' : ''}`}
+              >
+                {plan.code === 'GROWTH' && (
+                  <span className="lp-price-recommend">A LITTLE MORE ROOM TO GROW</span>
+                )}
+                <div className="lp-price-plan">{plan.name}</div>
+                <p>{plan.description}</p>
+                <div className="lp-price">
+                  <strong>
+                    {bdt(yearly ? Math.round(plan.annualMinor / 12) : plan.monthlyMinor)}
+                  </strong>
+                  <span>/ month</span>
+                </div>
+                <p className="lp-billed">
+                  {yearly ? `${bdt(plan.annualMinor)} billed yearly` : 'Billed monthly'} · per
+                  institution
+                </p>
+                <Link
+                  className={`lp-button ${plan.code === 'GROWTH' ? 'lp-button-dark' : 'lp-button-outline'}`}
+                  href={`/start?plan=${plan.code}&period=${yearly ? 'YEARLY' : 'MONTHLY'}`}
+                >
+                  Start with {plan.name} <ArrowUpRight size={17} />
+                </Link>
+                <div className="lp-plan-divider" />
+                <ul>
+                  {[
+                    `${number(plan.maxStudents)} student records`,
+                    `${plan.maxCampuses} campus${plan.maxCampuses > 1 ? 'es' : ''}`,
+                    `${plan.maxStaff} staff accounts`,
+                    'Academics, fees & guardian portal',
+                    ...(plan.features.includes('homework') ? ['Homework & feedback'] : []),
+                    ...(plan.features.includes('library') ? ['Library circulation'] : []),
+                    ...(plan.features.includes('transport') ? ['Transport operations'] : []),
+                    'Support request tracking',
+                  ].map((f) => (
+                    <li key={f}>
+                      <Check size={16} />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+              </article>
+            ))}
+          </div>
+          {error && (
+            <p role="alert">
+              Pricing could not load. Please{' '}
+              <a href="#pricing" onClick={() => window.location.reload()}>
+                try again
+              </a>
+              .
+            </p>
+          )}
+          <div className="lp-payment-note">
+            <CreditCard size={21} />
+            <p>
+              Prefer bKash, Nagad or a bank transfer? Submit your transaction reference. Your
+              subscription activates after the platform team reviews the payment. Manual activation
+              is available too.
+            </p>
+          </div>
+        </section>
+        <section id="questions" className="lp-container lp-faq">
+          <div>
+            <div className="lp-eyebrow">A LITTLE MORE CLARITY</div>
+            <h2>
+              Good questions.
+              <br />
+              <em>Clear answers.</em>
+            </h2>
+            <p>A few things you might be wondering before your next chapter.</p>
+            <Link href="/start" className="lp-text-link">
+              Let’s get you started <ArrowUpRight size={17} />
+            </Link>
+          </div>
+          <div>
+            {[
+              [
+                'Is every school a separate tenant?',
+                'Yes. Each institution has its own organization, campus memberships, subscription and access rules. A user must hold the appropriate membership and campus role to access an institution’s records.',
+              ],
+              [
+                'How do bKash and Nagad subscriptions work?',
+                'Send the displayed plan amount to the configured receiving account and submit your sender number and transaction reference. The platform administrator checks the received funds and approves or rejects the request. A reference alone does not activate a plan.',
+              ],
+              [
+                'What happens after my trial?',
+                'Renew using a monthly or yearly plan. If the subscription expires, core records remain available in read-only mode while your institution owner arranges renewal.',
+              ],
+              [
+                'Can parents and students use it on a phone?',
+                'Yes. The workspace is responsive. Families see only their linked students, published results, notices, fees and enabled family modules. Staff controls stay with authorized staff.',
+              ],
+              [
+                'Can I start with one campus and add more later?',
+                'Yes. Choose a plan with the campus, student and staff capacity you need. The platform checks those limits when records are added and when a subscription is approved.',
+              ],
+            ].map(([q, a]) => (
+              <details key={q}>
+                <summary>
+                  {q}
+                  <Plus size={20} />
+                </summary>
+                <p>{a}</p>
+              </details>
+            ))}
+          </div>
+        </section>
+        <section className="lp-final">
+          <div className="lp-container">
+            <span className="lp-final-spark">✳</span>
+            <div className="lp-eyebrow">A BETTER EVERY DAY BEGINS WITH ONE STEP.</div>
+            <h2>
+              Make room for
+              <br />
+              <em>what matters.</em>
+            </h2>
+            <p>Your people. Your possibilities. Your connected campus.</p>
+            <Link href="/start" className="lp-button lp-button-lime lp-button-large">
+              Start your campus <ArrowUpRight size={20} />
+            </Link>
+            <span className="lp-final-note">14 days to explore. No card required.</span>
+          </div>
+        </section>
+      </main>
+      <footer className="lp-footer lp-container">
+        <div>
+          <Brand />
+          <p>For the people behind every brighter school day.</p>
+        </div>
+        <div>
+          <a href="#platform">The platform</a>
+          <a href="#pricing">Pricing</a>
+          <a href="#questions">Questions</a>
+          <Link href="/login">Workspace login</Link>
+        </div>
+        <div className="lp-footer-bottom">
+          <span>© {new Date().getFullYear()} Campus One</span>
+          <span>
+            Thoughtfully built for Bangladesh <span>↗</span>
+          </span>
+        </div>
+      </footer>
+    </div>
+  );
 }

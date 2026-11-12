@@ -24,7 +24,11 @@ import {
   UserRoundPlus,
   Users,
   Wallet,
-  Library,Bus,NotebookPen,LifeBuoy,CreditCard,
+  Library,
+  Bus,
+  NotebookPen,
+  LifeBuoy,
+  CreditCard,
 } from 'lucide-react';
 import { api, post } from '@/lib/api';
 import { State } from './ui';
@@ -35,9 +39,9 @@ interface AppContext {
   sessionId: string;
   roles: string[];
   can: (...roles: string[]) => boolean;
-  organization:any;
-  features:string[];
-  billing:boolean;
+  organization: any;
+  features: string[];
+  billing: boolean;
 }
 const CampusContext = createContext<AppContext>(null!);
 export const useCampus = () => useContext(CampusContext);
@@ -47,14 +51,30 @@ const nav = [
     href: '/overview',
     label: 'Overview',
     icon: LayoutDashboard,
-    roles: [...admins, 'ACCOUNTS', 'TEACHER', 'CLASS_TEACHER', 'ADMISSION_OFFICER','LIBRARIAN','TRANSPORT_MANAGER'],
+    roles: [
+      ...admins,
+      'ACCOUNTS',
+      'TEACHER',
+      'CLASS_TEACHER',
+      'ADMISSION_OFFICER',
+      'LIBRARIAN',
+      'TRANSPORT_MANAGER',
+    ],
     group: 'WORKSPACE',
   },
   {
     href: '/students',
     label: 'Students',
     icon: Users,
-    roles: [...admins, 'ACCOUNTS', 'TEACHER', 'CLASS_TEACHER', 'ADMISSION_OFFICER','LIBRARIAN','TRANSPORT_MANAGER'],
+    roles: [
+      ...admins,
+      'ACCOUNTS',
+      'TEACHER',
+      'CLASS_TEACHER',
+      'ADMISSION_OFFICER',
+      'LIBRARIAN',
+      'TRANSPORT_MANAGER',
+    ],
     group: 'WORKSPACE',
   },
   {
@@ -100,11 +120,35 @@ const nav = [
     group: 'WORKSPACE',
   },
   { href: '/notices', label: 'Notice board', icon: Megaphone, roles: [], group: 'MANAGEMENT' },
-  { href:'/homework',label:'Homework',icon:NotebookPen,roles:[...admins,'TEACHER','CLASS_TEACHER','GUARDIAN','STUDENT'],group:'WORKSPACE' },
-  { href:'/library',label:'Library',icon:Library,roles:[...admins,'LIBRARIAN','GUARDIAN','STUDENT'],group:'MANAGEMENT' },
-  { href:'/transport',label:'Transport',icon:Bus,roles:[...admins,'TRANSPORT_MANAGER','GUARDIAN','STUDENT'],group:'MANAGEMENT' },
-  { href:'/support',label:'Help & requests',icon:LifeBuoy,roles:[],group:'MANAGEMENT' },
-  { href:'/subscription',label:'Subscription',icon:CreditCard,roles:['SUPER_ADMIN'],group:'MANAGEMENT' },
+  {
+    href: '/homework',
+    label: 'Homework',
+    icon: NotebookPen,
+    roles: [...admins, 'TEACHER', 'CLASS_TEACHER', 'GUARDIAN', 'STUDENT'],
+    group: 'WORKSPACE',
+  },
+  {
+    href: '/library',
+    label: 'Library',
+    icon: Library,
+    roles: [...admins, 'LIBRARIAN', 'GUARDIAN', 'STUDENT'],
+    group: 'MANAGEMENT',
+  },
+  {
+    href: '/transport',
+    label: 'Transport',
+    icon: Bus,
+    roles: [...admins, 'TRANSPORT_MANAGER', 'GUARDIAN', 'STUDENT'],
+    group: 'MANAGEMENT',
+  },
+  { href: '/support', label: 'Help & requests', icon: LifeBuoy, roles: [], group: 'MANAGEMENT' },
+  {
+    href: '/subscription',
+    label: 'Subscription',
+    icon: CreditCard,
+    roles: ['SUPER_ADMIN'],
+    group: 'MANAGEMENT',
+  },
   {
     href: '/reports',
     label: 'Reports & insights',
@@ -130,13 +174,18 @@ export default function Shell({ children }: { children: ReactNode }) {
     user?.roles.filter((r: any) => r.campusId === campusId).map((r: any) => r.role) || [];
   const can = (...required: string[]) =>
     required.length === 0 || required.some((r) => roles.includes(r));
-  const organization=campus?.organization;
-  const features:string[]=organization?.subscription?.plan.features||[];
-  const billing=!!user?.memberships?.some((m:any)=>m.organizationId===campus?.orgId&&['OWNER','ADMIN'].includes(m.role));
+  const organization = campus?.organization;
+  const features: string[] = organization?.subscription?.plan.features || [];
+  const billing = !!user?.memberships?.some(
+    (m: any) => m.organizationId === campus?.orgId && ['OWNER', 'ADMIN'].includes(m.role),
+  );
   useEffect(() => {
     api('auth/me')
       .then(async (u) => {
-        if(u.platformAdmin&&!u.roles.length){router.replace('/platform');return;}
+        if (u.platformAdmin && !u.roles.length) {
+          router.replace('/platform');
+          return;
+        }
         if (!u.roles.some((r: any) => r.campusId === localStorage.getItem('campus-id')))
           localStorage.setItem('campus-id', u.roles[0].campusId);
         const campuses = await api('campuses');
@@ -192,8 +241,13 @@ export default function Shell({ children }: { children: ReactNode }) {
     .map((s: string) => s[0])
     .join('');
   return (
-    <CampusContext.Provider value={{ user, campus, campusId, sessionId, roles, can,organization,features,billing }}>
-      <div className="app-shell" style={{'--green':organization?.accentColor||'#22644f'} as React.CSSProperties}>
+    <CampusContext.Provider
+      value={{ user, campus, campusId, sessionId, roles, can, organization, features, billing }}
+    >
+      <div
+        className="app-shell"
+        style={{ '--green': organization?.accentColor || '#22644f' } as React.CSSProperties}
+      >
         <a className="skip-link" href="#main-content">
           Skip to content
         </a>
@@ -212,7 +266,7 @@ export default function Shell({ children }: { children: ReactNode }) {
                 campus
                 <span style={{ display: 'inline', color: '#678c74', fontSize: '22px' }}>one</span>
               </strong>
-              <span title={organization?.name}>{organization?.name||'School & College ERP'}</span>
+              <span title={organization?.name}>{organization?.name || 'School & College ERP'}</span>
             </div>
           </Link>
           {['WORKSPACE', 'MANAGEMENT'].map((group) => (
@@ -317,14 +371,26 @@ export default function Shell({ children }: { children: ReactNode }) {
               </Link>
               <div
                 className="avatar"
-                style={{ width: 34, height: 34, background: '#e8eee5', color: '#6f8d6e' }}
+                style={{ width: 34, height: 34, background: '#e8eee5', color: '#576e56' }}
               >
                 {initials}
               </div>
             </div>
           </header>
           <main id="main-content" className="content">
-            {organization?.subscription && new Date(organization.subscription.currentPeriodEnd)<new Date()&&<div className="info-banner">Your subscription has expired. Campus records remain available in read-only mode. {billing?<Link href="/subscription" className="text-green">Renew subscription →</Link>:'Ask your organization owner to renew.'}</div>}
+            {organization?.subscription &&
+              new Date(organization.subscription.currentPeriodEnd) < new Date() && (
+                <div className="info-banner">
+                  Your subscription has expired. Campus records remain available in read-only mode.{' '}
+                  {billing ? (
+                    <Link href="/subscription" className="text-green">
+                      Renew subscription →
+                    </Link>
+                  ) : (
+                    'Ask your organization owner to renew.'
+                  )}
+                </div>
+              )}
             {error && <div className="error-banner">{error}</div>}
             {children}
             <footer className="app-footer">

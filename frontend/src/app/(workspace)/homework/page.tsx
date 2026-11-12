@@ -1,14 +1,259 @@
 'use client';
 import { useState } from 'react';
-import { BookOpen,CalendarDays,MessageSquare,Plus,Send } from 'lucide-react';
+import { BookOpen, CalendarDays, MessageSquare, Plus, Send } from 'lucide-react';
 import { ModuleGate } from '@/components/module-gate';
 import { useCampus } from '@/components/shell';
-import { Badge,Button,Field,FormModal,Modal,PageTitle,Panel,SearchBox,State,Toast } from '@/components/ui';
+import {
+  Badge,
+  Button,
+  Field,
+  FormModal,
+  Modal,
+  PageTitle,
+  Panel,
+  SearchBox,
+  State,
+  Toast,
+} from '@/components/ui';
 import { useData } from '@/lib/use-data';
-import { displayDate,post } from '@/lib/api';
-export default function Homework(){return <ModuleGate feature="homework"><HomeworkContent/></ModuleGate>;}
-function HomeworkContent(){const {can,sessionId}=useCampus(),staff=can('SUPER_ADMIN','CAMPUS_ADMIN','PRINCIPAL','TEACHER','CLASS_TEACHER');const {data,error,loading,reload}=useData('homework'),{data:sections}=useData(staff&&sessionId?`sections?sessionId=${sessionId}`:null),{data:subjects}=useData(staff?'subjects':null);const [search,setSearch]=useState(''),[modal,setModal]=useState<any>(null),[view,setView]=useState<any>(null),[toast,setToast]=useState('');
- const tasks=data?.filter((h:any)=>`${h.title} ${h.subject.name} ${h.section.schoolClass.name}`.toLowerCase().includes(search.toLowerCase()))||[];
- const fields:Field[]=modal?.type==='add'?[{key:'title',label:'Assignment title'},{key:'sectionId',label:'Class & section',options:sections?.map((s:any)=>({value:s.id,label:`${s.schoolClass.name} · ${s.name}`}))||[]},{key:'subjectId',label:'Subject',options:subjects?.map((s:any)=>({value:s.id,label:s.name}))||[]},{key:'instructions',label:'Assignment instructions',type:'textarea'},{key:'dueAt',label:'Submission deadline (Asia/Dhaka)',type:'datetime-local'},{key:'maxPoints',label:'Maximum points',type:'number',min:1,max:1000,defaultValue:100},{key:'late',label:'Late submissions',options:[{value:'false',label:'Do not accept after the deadline'},{value:'true',label:'Accept and label late submissions'}]}]:modal?.type==='submit'?[{key:'studentId',label:'Learner',remote:`students?sectionId=${modal.task.sectionId}`},{key:'answer',label:'Your response',type:'textarea'}]:[{key:'points',label:`Score (out of ${modal?.task.maxPoints||100})`,type:'number',min:0,max:modal?.task.maxPoints||100,defaultValue:modal?.submission.points??0},{key:'feedback',label:'Feedback for the learner',type:'textarea',defaultValue:modal?.submission.feedback||''}];
- return <><PageTitle title="A little learning, carried forward." eyebrow="HOMEWORK & FEEDBACK" description="Clear assignments, thoughtful responses and feedback that helps the next step.">{staff&&<Button onClick={()=>setModal({type:'add'})}><Plus size={16}/>Post assignment</Button>}</PageTitle><div className="toolbar" style={{padding:'0 0 24px'}}><SearchBox value={search} onChange={setSearch} placeholder="Search assignments, classes or subjects…"/><span className="text-muted">{data?.length||0} assignments · {data?.reduce((n:number,h:any)=>n+h.submissions.length,0)||0} accessible submissions</span></div>{loading||error||!tasks.length?<Panel><State loading={loading} error={error} empty={!tasks.length} onRetry={reload}/></Panel>:<div className="homework-grid">{tasks.map((h:any)=><Panel key={h.id} className="homework-card"><div className="homework-top"><span className="stat-icon blue"><BookOpen size={22}/></span><Badge tone={new Date(h.dueAt)<new Date()?'amber':'green'}>{new Date(h.dueAt)<new Date()?'DEADLINE PASSED':'OPEN'}</Badge></div><div className="eyebrow">{h.section.schoolClass.name} · {h.section.name} · {h.subject.name}</div><h2>{h.title}</h2><p className="homework-instructions">{h.instructions}</p><div className="homework-meta"><CalendarDays size={16}/><span>{new Date(h.dueAt).toLocaleString('en-GB',{timeZone:'Asia/Dhaka',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</span><strong>{h.maxPoints} points</strong></div><div className="homework-card-bottom"><span>{h.submissions.length} {staff?'submissions':'family submissions'} · {h.allowLate?'Late work accepted':'Deadline enforced'}</span>{staff?<Button variant="ghost" onClick={()=>setView(h)}>Review work <MessageSquare size={16}/></Button>:<Button variant="ghost" onClick={()=>setModal({type:'submit',task:h})}><Send size={16}/>Submit response</Button>}</div>{!staff&&h.submissions.map((s:any)=><div className="feedback-card" key={s.id}><strong>{s.student.fullName}</strong><Badge>{s.points===null?'SUBMITTED':`${s.points} / ${h.maxPoints}`}</Badge>{s.feedback&&<p>{s.feedback}</p>}</div>)}</Panel>)}</div>}{view&&<Modal title={`Responses · ${view.title}`} onClose={()=>setView(null)}><div className="submission-list">{view.submissions.map((s:any)=><div className="submission-card" key={s.id}><div><h3>{s.student.fullName}</h3><Badge tone={new Date(s.submittedAt)>new Date(view.dueAt)?'amber':'blue'}>{new Date(s.submittedAt)>new Date(view.dueAt)?'LATE':'ON TIME'}</Badge></div><p className="notice-body">{s.answer}</p>{s.feedback&&<div className="feedback-card"><strong>{s.points} / {view.maxPoints}</strong><p>{s.feedback}</p></div>}<Button variant="secondary" onClick={()=>{setModal({type:'grade',task:view,submission:s});setView(null);}}>Grade & give feedback</Button></div>)}{!view.submissions.length&&<State empty/>}</div></Modal>}{modal&&<FormModal title={modal.type==='add'?'Post a thoughtful assignment':modal.type==='submit'?modal.task.title:'Feedback that moves learning forward'} fields={fields} onClose={()=>setModal(null)} onSubmit={async v=>{if(modal.type==='add'){const {late,dueAt,...rest}=v;await post('homework',{...rest,allowLate:late==='true',dueAt:new Date(dueAt).toISOString()});}else if(modal.type==='submit')await post(`homework/${modal.task.id}/submit`,v);else await post(`homework/submissions/${modal.submission.id}/grade`,v);await reload();setToast('Learning records updated');}}/>}<Toast message={toast} clear={()=>setToast('')}/></>;
+import { displayDate, post } from '@/lib/api';
+export default function Homework() {
+  return (
+    <ModuleGate feature="homework">
+      <HomeworkContent />
+    </ModuleGate>
+  );
+}
+function HomeworkContent() {
+  const { can, sessionId } = useCampus(),
+    staff = can('SUPER_ADMIN', 'CAMPUS_ADMIN', 'PRINCIPAL', 'TEACHER', 'CLASS_TEACHER');
+  const { data, error, loading, reload } = useData('homework'),
+    { data: sections } = useData(staff && sessionId ? `sections?sessionId=${sessionId}` : null),
+    { data: subjects } = useData(staff ? 'subjects' : null);
+  const [search, setSearch] = useState(''),
+    [modal, setModal] = useState<any>(null),
+    [view, setView] = useState<any>(null),
+    [toast, setToast] = useState('');
+  const tasks =
+    data?.filter((h: any) =>
+      `${h.title} ${h.subject.name} ${h.section.schoolClass.name}`
+        .toLowerCase()
+        .includes(search.toLowerCase()),
+    ) || [];
+  const fields: Field[] =
+    modal?.type === 'add'
+      ? [
+          { key: 'title', label: 'Assignment title' },
+          {
+            key: 'sectionId',
+            label: 'Class & section',
+            options:
+              sections?.map((s: any) => ({
+                value: s.id,
+                label: `${s.schoolClass.name} · ${s.name}`,
+              })) || [],
+          },
+          {
+            key: 'subjectId',
+            label: 'Subject',
+            options: subjects?.map((s: any) => ({ value: s.id, label: s.name })) || [],
+          },
+          { key: 'instructions', label: 'Assignment instructions', type: 'textarea' },
+          { key: 'dueAt', label: 'Submission deadline (Asia/Dhaka)', type: 'datetime-local' },
+          {
+            key: 'maxPoints',
+            label: 'Maximum points',
+            type: 'number',
+            min: 1,
+            max: 1000,
+            defaultValue: 100,
+          },
+          {
+            key: 'late',
+            label: 'Late submissions',
+            options: [
+              { value: 'false', label: 'Do not accept after the deadline' },
+              { value: 'true', label: 'Accept and label late submissions' },
+            ],
+          },
+        ]
+      : modal?.type === 'submit'
+        ? [
+            {
+              key: 'studentId',
+              label: 'Learner',
+              remote: `students?sectionId=${modal.task.sectionId}`,
+            },
+            { key: 'answer', label: 'Your response', type: 'textarea' },
+          ]
+        : [
+            {
+              key: 'points',
+              label: `Score (out of ${modal?.task.maxPoints || 100})`,
+              type: 'number',
+              min: 0,
+              max: modal?.task.maxPoints || 100,
+              defaultValue: modal?.submission.points ?? 0,
+            },
+            {
+              key: 'feedback',
+              label: 'Feedback for the learner',
+              type: 'textarea',
+              defaultValue: modal?.submission.feedback || '',
+            },
+          ];
+  return (
+    <>
+      <PageTitle
+        title="A little learning, carried forward."
+        eyebrow="HOMEWORK & FEEDBACK"
+        description="Clear assignments, thoughtful responses and feedback that helps the next step."
+      >
+        {staff && (
+          <Button onClick={() => setModal({ type: 'add' })}>
+            <Plus size={16} />
+            Post assignment
+          </Button>
+        )}
+      </PageTitle>
+      <div className="toolbar" style={{ padding: '0 0 24px' }}>
+        <SearchBox
+          value={search}
+          onChange={setSearch}
+          placeholder="Search assignments, classes or subjects…"
+        />
+        <span className="text-muted">
+          {data?.length || 0} assignments ·{' '}
+          {data?.reduce((n: number, h: any) => n + h.submissions.length, 0) || 0} accessible
+          submissions
+        </span>
+      </div>
+      {loading || error || !tasks.length ? (
+        <Panel>
+          <State loading={loading} error={error} empty={!tasks.length} onRetry={reload} />
+        </Panel>
+      ) : (
+        <div className="homework-grid">
+          {tasks.map((h: any) => (
+            <Panel key={h.id} className="homework-card">
+              <div className="homework-top">
+                <span className="stat-icon blue">
+                  <BookOpen size={22} />
+                </span>
+                <Badge tone={new Date(h.dueAt) < new Date() ? 'amber' : 'green'}>
+                  {new Date(h.dueAt) < new Date() ? 'DEADLINE PASSED' : 'OPEN'}
+                </Badge>
+              </div>
+              <div className="eyebrow">
+                {h.section.schoolClass.name} · {h.section.name} · {h.subject.name}
+              </div>
+              <h2>{h.title}</h2>
+              <p className="homework-instructions">{h.instructions}</p>
+              <div className="homework-meta">
+                <CalendarDays size={16} />
+                <span>
+                  {new Date(h.dueAt).toLocaleString('en-GB', {
+                    timeZone: 'Asia/Dhaka',
+                    day: 'numeric',
+                    month: 'short',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </span>
+                <strong>{h.maxPoints} points</strong>
+              </div>
+              <div className="homework-card-bottom">
+                <span>
+                  {h.submissions.length} {staff ? 'submissions' : 'family submissions'} ·{' '}
+                  {h.allowLate ? 'Late work accepted' : 'Deadline enforced'}
+                </span>
+                {staff ? (
+                  <Button variant="ghost" onClick={() => setView(h)}>
+                    Review work <MessageSquare size={16} />
+                  </Button>
+                ) : (
+                  <Button variant="ghost" onClick={() => setModal({ type: 'submit', task: h })}>
+                    <Send size={16} />
+                    Submit response
+                  </Button>
+                )}
+              </div>
+              {!staff &&
+                h.submissions.map((s: any) => (
+                  <div className="feedback-card" key={s.id}>
+                    <strong>{s.student.fullName}</strong>
+                    <Badge>
+                      {s.points === null ? 'SUBMITTED' : `${s.points} / ${h.maxPoints}`}
+                    </Badge>
+                    {s.feedback && <p>{s.feedback}</p>}
+                  </div>
+                ))}
+            </Panel>
+          ))}
+        </div>
+      )}
+      {view && (
+        <Modal title={`Responses · ${view.title}`} onClose={() => setView(null)}>
+          <div className="submission-list">
+            {view.submissions.map((s: any) => (
+              <div className="submission-card" key={s.id}>
+                <div>
+                  <h3>{s.student.fullName}</h3>
+                  <Badge tone={new Date(s.submittedAt) > new Date(view.dueAt) ? 'amber' : 'blue'}>
+                    {new Date(s.submittedAt) > new Date(view.dueAt) ? 'LATE' : 'ON TIME'}
+                  </Badge>
+                </div>
+                <p className="notice-body">{s.answer}</p>
+                {s.feedback && (
+                  <div className="feedback-card">
+                    <strong>
+                      {s.points} / {view.maxPoints}
+                    </strong>
+                    <p>{s.feedback}</p>
+                  </div>
+                )}
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setModal({ type: 'grade', task: view, submission: s });
+                    setView(null);
+                  }}
+                >
+                  Grade & give feedback
+                </Button>
+              </div>
+            ))}
+            {!view.submissions.length && <State empty />}
+          </div>
+        </Modal>
+      )}
+      {modal && (
+        <FormModal
+          title={
+            modal.type === 'add'
+              ? 'Post a thoughtful assignment'
+              : modal.type === 'submit'
+                ? modal.task.title
+                : 'Feedback that moves learning forward'
+          }
+          fields={fields}
+          onClose={() => setModal(null)}
+          onSubmit={async (v) => {
+            if (modal.type === 'add') {
+              const { late, dueAt, ...rest } = v;
+              await post('homework', {
+                ...rest,
+                allowLate: late === 'true',
+                dueAt: new Date(dueAt).toISOString(),
+              });
+            } else if (modal.type === 'submit') await post(`homework/${modal.task.id}/submit`, v);
+            else await post(`homework/submissions/${modal.submission.id}/grade`, v);
+            await reload();
+            setToast('Learning records updated');
+          }}
+        />
+      )}
+      <Toast message={toast} clear={() => setToast('')} />
+    </>
+  );
 }
