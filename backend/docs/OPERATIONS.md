@@ -12,6 +12,8 @@ Never seed real production with demo data. On a dedicated demo, change every see
 
 ## SaaS subscriptions
 
+On a fresh production database use `npm run platform:bootstrap` inside the API container after migration, with PLATFORM_ADMIN_EMAIL and a unique PLATFORM_SEED_PASSWORD (minimum 16 characters). It initializes the platform owner and default plans without demo data. Repeated runs preserve passwords and edited prices; an email mismatch aborts instead of replacing the owner.
+
 Landing prices are read from active plans. Signup provisions an isolated institution, campus, owner and a 14-day trial. Plan quotas and feature gates are checked by the API, including concurrent admissions/provisioning. Student limits count stored student records, including archived records; staff limits count distinct users with staff roles across the institution. Transfers create a destination student record and consume capacity.
 
 At /platform configure the bKash/Nagad receiving number or bank instructions. The institution owner submits a transaction reference from /subscription. Verify the actual transfer in the merchant account before approval; entered reference strings alone are not proof of payment. Approval requires the exact received amount, records the reviewer/note, and activates the purchased period once. Duplicate method/reference pairs are rejected. Manual activation also requires a reason and an idempotency key. Approved receipts are downloadable. Plan/settings edits are recorded in GET /api/platform/audit; institution events are available in the organization detail.

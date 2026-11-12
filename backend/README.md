@@ -79,6 +79,8 @@ With a seeded API/web running, append `--integration` for API acceptance and Chr
 
 ## Deployment boundaries
 
+For a fresh production database, set `PLATFORM_ADMIN_EMAIL` and a unique `PLATFORM_SEED_PASSWORD` of at least 16 characters, start the stack, then run `docker compose --env-file backend/.env -f backend/compose.yaml exec -T api npm run platform:bootstrap`. This initializes plans and the platform owner without demo tenants/students. Repeating it preserves existing passwords and edited prices. Create institutions through signup.
+
 Use HTTPS, unique production secrets/passwords, backed-up encryption keys and tested database restores before public release. SMS defaults to simulated delivery. Live SSLCommerz/SMS requires credentials and provider verification. Wallet transaction references use manual review, not direct bKash/Nagad APIs. Payroll, video LMS, S3, automated refunds and bank reconciliation are outside this release.
 
 Read [operations](docs/OPERATIONS.md), [API](docs/API.md), [environment settings](.env.example) and [original specification](Project_spec.md).
