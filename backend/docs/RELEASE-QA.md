@@ -21,3 +21,11 @@ API acceptance covers role and tenant isolation, guardian privacy, concurrent pa
 Browser coverage includes every core workspace, sample attendance/payment persistence, guardian navigation, mobile overflow/14px minimum text, landing interactions, institutional signup, platform review, subscription activation and PDF receipt download. Automated axe checks reported no WCAG 2 A/AA or 2.1 A/AA violations on landing, login, overview, library, transport, homework, support and subscription routes. Desktop/mobile landing screenshots were also reviewed.
 
 This is local release evidence. Live SMS/merchant delivery, public HTTPS deployment, infrastructure-specific load capacity, full manual accessibility review and operational backup scheduling require the target production environment. Receiving accounts must be configured by the platform owner; automated-test account numbers are not merchant accounts.
+
+## School website CMS release
+
+The subsequent school CMS release passed **9 unit tests, 26 database/HTTP tests and 8 browser tests** against the production Docker stack. Type checks, formatting, production builds and both dependency audits also passed (zero reported vulnerabilities).
+
+New acceptance coverage verifies isolated CMS permissions, draft privacy, media signatures/public headers, protected referenced files, edit conflicts, preview-token scope, scheduled/expired posts, revision restore and republish, published-only roll/DOB results, ambiguous-roll rejection, PDF capabilities, domain routing/disconnect and private enquiries. Browser coverage follows an institution through CMS setup, branding, page editing, preview, publishing, result/PDF lookup and enquiry resolution. It checks actual localhost-subdomain routing, blocks account APIs on school hosts, validates sitemap/RSS responses and verifies the Socket.IO polling proxy. Public school/result pages and the CMS editor pass automated accessibility checks.
+
+The optional Caddy HTTPS configuration validated successfully. No real custom domain was supplied, so public DNS propagation and live ACME certificate issuance remain deployment checks. The local demonstration website is available at /school/scholars; public exam lookup remains disabled there until a school chooses and publishes its result-access policy.

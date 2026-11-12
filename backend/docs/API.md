@@ -36,3 +36,11 @@ Platform-only: GET /platform/dashboard, GET /platform/organizations/:id, POST /p
 Advanced module base routes: /library/books, /library/loans, /library/reservations; /transport/routes, /transport/assignments, /transport/trips; /homework and /homework/:id/submit and /homework/submissions/:id/grade; /support/tickets and /support/tickets/:id/comments. Campus and role restrictions apply in addition to subscription feature gates. See controller validation schemas for exact mutation payloads.
 
 GET /health is database/Redis readiness (503 when dependencies fail). GET /health/live is liveness. Error responses use appropriate 4xx/5xx codes; transient connection-pool exhaustion returns 503 with Retry-After.
+
+## School websites
+
+Authenticated administrators/principals use GET/POST /website, PATCH /website/draft, POST /website/publish, /website/unpublish, /website/preview and /website/restore. Draft save, publish and restore require the current numeric revision; conflicting editor versions return 409. Media: POST /website/assets, DELETE /website/assets/:id. Domains: POST /website/domains, POST /website/domains/:id/verify and DELETE /website/domains/:id. Enquiry inbox: GET /website/inquiries and PATCH /website/inquiries/:id.
+
+Public routes live under /public-websites: GET /resolve?host=HOST, /tls-authorization?domain=HOST, /media/:id and /:subdomain. Result options: GET /:subdomain/results/options. Lookup: POST /:subdomain/results with termId, sectionId, rollNumber and (by default) dob in YYYY-MM-DD format. It returns a minimal published result and signed five-minute PDF URL. Contact: POST /:subdomain/inquiries with name, email, optional phone, message and optional honeypot website.
+
+See the [complete CMS checklist and hosting contract](SCHOOL-WEBSITES.md).
