@@ -1,0 +1,58 @@
+# Production stack for the School & College ERP (Campus One) on the shared EC2 host.
+# Lives at /opt/apps/erp/docker-compose.yml (copied by .github/workflows/deploy.yml)
+# next to /opt/apps/erp/.env (see deploy/.env.example). Host Nginx terminates TLS:
+#   https://erp.13.203.3.1.sslip.io      -> 127.0.0.1:3005 (frontend)
+#   https://api.erp.13.203.3.1.sslip.io  -> 127.0.0.1:4005 (backend; /api prefix, health at /api/health)
+name: erp
+
+services:
+  backend:
+    image: ghcr.io/amitavrchy/erp-backend:${IMAGE_TAG:-latest}
+    container_name: erp-backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+    ports:
+      - "127.0.0.1:4005:4000"
+    networks: [apps-net]
+    deploy:
+      resources:
+        limits:
+          memory: 416M
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging: &logging
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  frontend:
+    image: ghcr.io/amitavrchy/erp-frontend:${IMAGE_TAG:-latest}
+    container_name: erp-frontend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+      API_INTERNAL_URL: http://erp-backend:4000
+    ports:
+      - "127.0.0.1:3005:3000"
+    networks: [apps-net]
+    depends_on: [backend]
+    deploy:
+      resources:
+        limits:
+          memory: 320M
+    logging: *logging
+
+networks:
+  apps-net:
+    external: true
