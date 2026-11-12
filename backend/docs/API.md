@@ -24,3 +24,15 @@ Attendance: `{sectionId,date,period:0,records:[{enrollmentId,status:"PRESENT"}]}
 Promotion: `{enrollmentIds,targetSectionId,carryDues:false}` advances one class into a writable new session. Transfer: `{enrollmentId,targetSectionId,effectiveDate}` requires administrative access to both campuses in the same organization.
 
 Admission submission returns a 24-hour upload capability. Upload: `{token,fileName,mimeType,content:<base64>}`. Staff document listings return five-minute links. Offer acceptance requires the private acceptance token as `{token}`; an offer ID is insufficient.
+
+## SaaS and advanced modules
+
+Public: GET /saas/plans and POST /saas/register. Registration accepts organizationName, slug, campusName, planCode, period, fullName, email and a password of at least 12 characters. Public admissions options accept ?school=<organization-slug>; share /apply?school=<slug>.
+
+Tenant owner: GET /saas/me, PATCH /saas/organization, POST /saas/payment-requests and GET /saas/payments/:id/receipt. Payment requests accept planId, period (MONTHLY/YEARLY), method (BKASH/NAGAD/BANK), reference and senderPhone. Successful submission remains PENDING.
+
+Platform-only: GET /platform/dashboard, GET /platform/organizations/:id, POST /platform/payments/:id/review, POST /platform/organizations/:id/grant, PATCH /platform/organizations/:id, PATCH /platform/settings, PATCH /platform/plans/:id and GET /platform/audit. Review accepts decision, receivedAmountMinor and note. Grant requires planId, period, amountMinor, reason and a UUID idempotencyKey.
+
+Advanced module base routes: /library/books, /library/loans, /library/reservations; /transport/routes, /transport/assignments, /transport/trips; /homework and /homework/:id/submit and /homework/submissions/:id/grade; /support/tickets and /support/tickets/:id/comments. Campus and role restrictions apply in addition to subscription feature gates. See controller validation schemas for exact mutation payloads.
+
+GET /health is database/Redis readiness (503 when dependencies fail). GET /health/live is liveness. Error responses use appropriate 4xx/5xx codes; transient connection-pool exhaustion returns 503 with Retry-After.

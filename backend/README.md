@@ -1,79 +1,84 @@
-# Campus One — School & College ERP
+﻿# Campus One — School & College ERP
 
-Bangladesh-focused multi-campus ERP with a staff workspace, public admission form and guardian/student portal. Built with Next.js 16, React 19, NestJS 11, Prisma 6, PostgreSQL 17, Redis, BullMQ and Socket.IO.
+Multi-tenant SaaS for Bangladesh institutions. Next.js 16 / React 19, NestJS 11, Prisma 6, PostgreSQL 17 and Redis/BullMQ. All source and configuration live inside frontend and backend.
 
-## Start locally
+## Complete Docker setup
 
-Requires Node.js 22+ and Docker Desktop with its Linux engine running.
-
-```sh
-npm ci
-npm run setup
-docker compose up -d postgres redis --wait
-npm run db:generate
-npm run db:migrate
-npm run db:seed
-npm run dev
-```
-
-Open **http://localhost:3000**. API health: http://localhost:4000/api/health. Local database port: **55439**. Redis: **56439**. `setup` preserves an existing `.env`; environment files are ignored by Git.
-
-## Complete Docker stack
+Requires Node.js 22+ and Docker Desktop's Linux engine. From the repository root:
 
 ```sh
+npm --prefix backend ci
+npm --prefix frontend ci
+cd backend
 npm run setup
-docker compose up --build -d --wait
-docker compose exec api npm run db:seed
+cd ..
+docker compose --env-file backend/.env -f backend/compose.yaml up --build -d --wait
+docker compose --env-file backend/.env -f backend/compose.yaml exec -T api npm run db:seed
 ```
 
-The API migrates automatically on startup. Named volumes preserve data. Seed only development or dedicated demo deployments.
+Open http://localhost:3000. API readiness: http://localhost:4000/api/health (checks database and Redis); liveness: /api/health/live. Database/Redis host ports: 55439/56439. Data persists in named volumes. API startup applies migrations. Seed only development or dedicated demo deployments.
+
+## Local development
+
+After installing dependencies and generating backend/.env:
+
+```sh
+docker compose --env-file backend/.env -f backend/compose.yaml up -d postgres redis --wait
+npm --prefix backend run db:generate
+npm --prefix backend run db:migrate
+npm --prefix backend run db:seed
+npm --prefix backend run dev
+```
+
+In another terminal: `npm --prefix frontend run dev`. Stop Docker API/web if they occupy ports 4000/3000. Setup preserves existing environment files.
 
 ## Demo accounts
 
-Seed: **2 campuses, classes 6–10, 200 students**, attendance, marks, fees, payments, admissions and bilingual notices. Password: `SEED_PASSWORD` in `.env` (example: `CampusOne!2026`). Existing accounts are preserved on reseeding; changing that variable does not reset them.
+Seed: two campuses, classes 6–10, 200 learners and academic, financial, library, transport, homework and support examples.
 
-| Role              | Email                      |
-| ----------------- | -------------------------- |
-| Super admin       | admin@campusone.edu.bd     |
-| Principal         | principal@campusone.edu.bd |
-| Accounts          | accounts@campusone.edu.bd  |
-| Class teacher     | teacher@campusone.edu.bd   |
-| Subject teacher   | hasan@campusone.edu.bd     |
-| Admission officer | admission@campusone.edu.bd |
-| Guardian          | guardian@campusone.edu.bd  |
-| Student           | student@campusone.edu.bd   |
+| Role                      | Email                      |
+| ------------------------- | -------------------------- |
+| Platform owner            | platform@campusone.edu.bd  |
+| Institution administrator | admin@campusone.edu.bd     |
+| Principal                 | principal@campusone.edu.bd |
+| Accounts                  | accounts@campusone.edu.bd  |
+| Class teacher             | teacher@campusone.edu.bd   |
+| Subject teacher           | hasan@campusone.edu.bd     |
+| Admission officer         | admission@campusone.edu.bd |
+| Guardian                  | guardian@campusone.edu.bd  |
+| Student                   | student@campusone.edu.bd   |
 
-The guardian has two linked learners per campus. The student account belongs to the first Dhanmondi student. Provision new accounts in Settings.
+Default demo password: `CampusOne!2026` (`SEED_PASSWORD`). Platform owner supports separate `PLATFORM_ADMIN_EMAIL` / `PLATFORM_SEED_PASSWORD`. Reseeding preserves existing passwords. Campus administrators cannot access the platform console.
 
-## Features
+## Implemented product
 
-- Cookie authentication, password rotation, campus roles, teacher assignments and guardian/student isolation.
-- Campuses, sessions, classes, sections, shifts, subjects, timetable conflicts and holidays.
-- Admission review, weighted merit lists, waitlists, expiring private offers, concurrent capacity enforcement and enrollment.
-- AES-256-GCM document uploads with signed expiring downloads.
-- Daily/period attendance, CSV import/templates, leave requests and deduplicated absence alerts after a grace period.
-- Monthly/quarterly/one-time fees, integer-paisa ledgers, capped fines, partial FIFO payments, idempotency and dual-control head-specific waivers.
-- Automated monthly billing, configurable sibling tuition discounts and optional due reminders.
-- SSLCommerz checkout with server-side amount/currency validation and staff cash/bank recording.
-- NCTB GPA/percentage, weighted terms, entry deadlines, Principal unlocking, moderation, publication and PDF reports/receipts.
-- Targeted English/Bangla notices, scheduled delivery, SMS logs and realtime refresh.
-- Promotion with dues handling, cross-campus transfer API, analytics, audit logs and CSV exports.
-- Responsive layout, minimum **14px** text, keyboard access, native dialogs, reduced motion and loading/error/empty states.
+- Landing page with live plan prices, annual/monthly pricing, responsive navigation, feature previews, FAQ and institutional signup.
+- Independent tenants and campus memberships; trials, plan feature gates, student/staff/campus quotas and expired-subscription read-only access.
+- Platform console for institution status, payment review, idempotent manual activation, editable plans and receiving accounts. Tenant billing includes usage, history and PDF receipts.
+- Manual bKash/Nagad/bank transaction-reference submission. Platform owner first configures receiving accounts, then verifies the actual transfer and approves the exact amount. Submission alone never activates a plan.
+- Student/guardian records, academic sessions, classes, subjects, timetable conflicts, holidays, promotion and cross-campus transfers.
+- School-specific admission links, merit/waitlists, capacity-safe offers and encrypted document uploads.
+- Daily/period attendance, CSV import, leave and deduplicated absence alerts.
+- Integer-paisa ledgers, recurring invoices, capped fines, FIFO payments, idempotency, dual-control waivers and optional SSLCommerz checkout.
+- NCTB grading, moderation, published results, weighted terms and PDF report cards.
+- Library inventory, concurrency-safe loans, reservations and invoice-backed overdue/lost-book charges.
+- Transport routes/stops, capacity-safe assignments, boarding/drop-off records and fee invoices.
+- Homework deadlines, private submissions, grading; support tickets with assignment, priority, SLA targets and comments.
+- Targeted bilingual notices, background delivery, realtime updates, analytics, audit logs and guardian/student portals.
+- Responsive UI, minimum 14px typography, reduced motion and automated accessibility regression checks.
 
-## Verify
+## Release verification
 
 ```sh
-npm test
-npm run typecheck
-npm run build
-npm run format:check
-npm audit
+node backend/setup/verify.mjs
 ```
 
-With the seeded API/web running, run `npm run test:integration` and `npm run test:e2e`. Browser tests use Google Chrome; install with `npx playwright install chrome` if needed. Integration fixtures are isolated and removed after the run.
+With a seeded API/web running, append `--integration` for API acceptance and Chrome browser/accessibility tests. Install Chrome from frontend with `npx playwright install chrome` if needed. Test only dedicated test/demo environments: tenant fixtures are cleaned up, but browser workflows also save demo attendance and a BDT 1 payment.
 
-## Integration status
+`backend/automation/workflows/ci.yml` is a CI template, not an automatically discovered GitHub workflow. The two-directory root constraint keeps it here; run the verifier locally or through an externally configured runner.
 
-Real payments require merchant credentials and public HTTPS callbacks. Real SMS requires a gateway adapter. Defaults are manual payment and **simulated SMS**, which never reaches a phone. SSLCommerz is the online gateway; direct bKash/Nagad adapters are not implemented. Documents use encrypted PostgreSQL storage rather than S3. Promotion/PDFs are synchronous; PDFs are uncached. Vendor-specific biometric imports need mapping to the supplied CSV. Grade scales are seeded in the database with NCTB fallback. Library/transport, payroll and video LMS remain outside the implemented core.
+## Deployment boundaries
 
-Read the [operations guide](docs/OPERATIONS.md), [API guide](docs/API.md), [.env.example](.env.example) and [original specification](Project_spec.md) for setup and advanced integration boundaries.
+Use HTTPS, unique production secrets/passwords, backed-up encryption keys and tested database restores before public release. SMS defaults to simulated delivery. Live SSLCommerz/SMS requires credentials and provider verification. Wallet transaction references use manual review, not direct bKash/Nagad APIs. Payroll, video LMS, S3, automated refunds and bank reconciliation are outside this release.
+
+Read [operations](docs/OPERATIONS.md), [API](docs/API.md), [environment settings](.env.example) and [original specification](Project_spec.md).
