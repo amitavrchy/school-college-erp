@@ -24,7 +24,24 @@ test('landing pricing, role previews and mobile navigation are usable', async ({
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /A school day/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Let teachers.*teach/ })).toBeVisible();
+  await expect(page.locator('.school-hero-photo > img')).toBeVisible();
+  expect(
+    await page
+      .locator('.school-hero-photo > img')
+      .evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0),
+  ).toBe(true);
+  await page.getByRole('tab', { name: 'Fees', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Fee collection receipt' })).toBeVisible();
+  await page.getByRole('tab', { name: 'Results', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Term examination', exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Attendance', exact: true }).click();
+  await page.getByRole('tab', { name: 'Attendance', exact: true }).focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('tab', { name: 'Fees', exact: true })).toBeFocused();
+  await expect(page.getByRole('heading', { name: 'Fee collection receipt' })).toBeVisible();
+  await page.keyboard.press('Home');
+  await expect(page.locator('.school-workbench .school-register')).toBeVisible();
   await expect(page.locator('.lp-price-card')).toHaveCount(3);
   const monthly = await page
     .locator('.lp-price-card')
@@ -36,12 +53,22 @@ test('landing pricing, role previews and mobile navigation are usable', async ({
     monthly,
   );
   await expect(page.locator('.lp-billed').first()).toContainText('billed yearly');
+  await expect(page.getByRole('link', { name: 'Start with Growth' })).toHaveAttribute(
+    'href',
+    '/start?plan=GROWTH&period=YEARLY',
+  );
   await page.getByRole('tab', { name: 'Teachers', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'More teaching. Less chasing.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Your class, ready for the day.' })).toBeVisible();
   await page.getByText('How do bKash and Nagad subscriptions work?', { exact: true }).click();
   await expect(page.getByText(/A reference alone does not activate a plan/)).toBeVisible();
   await noSmallText(page);
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'Open menu', exact: true }).click();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'Open menu', exact: true })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
   await page.getByRole('button', { name: 'Open menu', exact: true }).click();
   await page
     .getByRole('navigation', { name: 'Main navigation' })
