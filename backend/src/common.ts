@@ -37,19 +37,28 @@ export class ApiErrors implements ExceptionFilter {
       const value = error.getResponse();
       message = typeof value === 'string' ? value : (value as any).message;
     } else if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      status = ['P2002', 'P2003', 'P2034'].includes(error.code)
-        ? 409
-        : error.code === 'P2025'
-          ? 404
-          : 500;
+      const busy =
+        error.code === 'P2024' ||
+        (error.code === 'P2028' &&
+          String(error.meta?.error || '').startsWith('Unable to start a transaction'));
+      status = busy
+        ? 503
+        : ['P2002', 'P2003', 'P2034'].includes(error.code)
+          ? 409
+          : error.code === 'P2025'
+            ? 404
+            : 500;
       message =
-        status === 409
-          ? 'This change conflicts with an existing record. Refresh and try again.'
-          : status === 404
-            ? 'Record not found'
-            : message;
+        status === 503
+          ? 'The service is busy. Please retry shortly.'
+          : status === 409
+            ? 'This change conflicts with an existing record. Refresh and try again.'
+            : status === 404
+              ? 'Record not found'
+              : message;
     }
     if (status === 500) console.error(error);
+    if (status === 503) res.setHeader('Retry-After', '5');
     res.status(status).json({ statusCode: status, message });
   }
 }

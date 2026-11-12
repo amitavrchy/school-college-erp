@@ -20,6 +20,10 @@ export class Jobs implements OnModuleInit, OnModuleDestroy {
     },
   });
   private worker?: Worker;
+  async ping() {
+    if (this.connection.status !== 'ready') throw new Error('Job storage is unavailable');
+    return this.connection.ping();
+  }
   constructor(
     @Inject(Db) private db: Db,
     @Inject(Realtime) private realtime: Realtime,

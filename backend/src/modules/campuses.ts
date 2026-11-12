@@ -15,7 +15,10 @@ export class CampusesController {
   campuses(@Actor() c: Context) {
     return this.db.campus.findMany({
       where: { roles: { some: { userId: c.userId } } },
-      include: { sessions: { orderBy: { startsOn: 'desc' } }, organization:{include:{subscription:{include:{plan:true}}}} },
+      include: {
+        sessions: { orderBy: { startsOn: 'desc' } },
+        organization: { include: { subscription: { include: { plan: true } } } },
+      },
     });
   }
   @Post('campuses')
@@ -30,14 +33,14 @@ export class CampusesController {
       body,
     );
     const campus = await this.db.campus.findUniqueOrThrow({ where: { id: c.campusId } });
-    return this.db.serial(async tx=>{
-      await requireQuota(tx,campus.orgId,'campuses');
+    return this.db.serial(async (tx) => {
+      await requireQuota(tx, campus.orgId, 'campuses');
       return tx.campus.create({
-      data: {
-        ...v,
-        orgId: campus.orgId,
-        roles: { create: { userId: c.userId, role: 'SUPER_ADMIN' } },
-      },
+        data: {
+          ...v,
+          orgId: campus.orgId,
+          roles: { create: { userId: c.userId, role: 'SUPER_ADMIN' } },
+        },
       });
     });
   }

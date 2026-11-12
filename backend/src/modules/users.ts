@@ -41,17 +41,17 @@ export class UsersController {
       body,
     );
     const { password, role, ...data } = v;
-    const passwordHash=await hash(password,12);
-    const user = await this.db.serial(async tx=>{
-      if(!['GUARDIAN','STUDENT'].includes(role))await requireQuota(tx,c.orgId,'staff');
+    const passwordHash = await hash(password, 12);
+    const user = await this.db.serial(async (tx) => {
+      if (!['GUARDIAN', 'STUDENT'].includes(role)) await requireQuota(tx, c.orgId, 'staff');
       return tx.user.create({
-      data: {
-        ...data,
-        passwordHash,
-        memberships:{create:{organizationId:c.orgId,role:'MEMBER'}},
-        roles: { create: { campusId: c.campusId, role } },
-      },
-      select: { id: true, fullName: true, email: true },
+        data: {
+          ...data,
+          passwordHash,
+          memberships: { create: { organizationId: c.orgId, role: 'MEMBER' } },
+          roles: { create: { campusId: c.campusId, role } },
+        },
+        select: { id: true, fullName: true, email: true },
       });
     });
     await this.audit.log(c, 'CREATE', 'User', user.id, { role });

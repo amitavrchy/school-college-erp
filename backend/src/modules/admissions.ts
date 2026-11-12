@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { z } from 'zod';
 import { Db } from '../db';
@@ -28,8 +29,17 @@ export class AdmissionsController {
   ) {}
   @Public()
   @Get('options')
-  options() {
+  options(@Query('school') school?: string) {
+    const slug = parse(
+      z
+        .string()
+        .min(3)
+        .max(48)
+        .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+      school || 'scholars',
+    );
     return this.db.campus.findMany({
+      where: { organization: { slug, status: 'ACTIVE' } },
       select: {
         id: true,
         name: true,
@@ -54,8 +64,8 @@ export class AdmissionsController {
     const session = await this.db.academicSession.findFirstOrThrow({
       where: { id: v.sessionId, status: 'ACTIVE' },
     });
-    const campus=await this.db.campus.findUniqueOrThrow({where:{id:session.campusId}});
-    await requireSubscription(this.db,campus.orgId);
+    const campus = await this.db.campus.findUniqueOrThrow({ where: { id: session.campusId } });
+    await requireSubscription(this.db, campus.orgId);
     await this.db.schoolClass.findFirstOrThrow({
       where: { id: v.applyingClassId, campusId: session.campusId },
     });
@@ -193,8 +203,10 @@ export class AdmissionsController {
       const count = await tx.enrollment.count({
         where: { sectionId: offer.sectionId, status: 'ACTIVE' },
       });
-      const campus=await tx.campus.findUniqueOrThrow({where:{id:offer.section.schoolClass.campusId}});
-      await requireQuota(tx,campus.orgId,'students');
+      const campus = await tx.campus.findUniqueOrThrow({
+        where: { id: offer.section.schoolClass.campusId },
+      });
+      await requireQuota(tx, campus.orgId, 'students');
       if (count >= offer.section.capacity) throw new ConflictException('Section capacity reached');
       const student = await tx.student.create({
         data: {

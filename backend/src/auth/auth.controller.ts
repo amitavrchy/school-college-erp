@@ -50,13 +50,28 @@ export class AuthController {
       path: '/',
       maxAge: 8 * 3600_000,
     });
-    return { id: user.id, fullName: user.fullName,platformAdmin:user.platformAdmin };
+    return { id: user.id, fullName: user.fullName, platformAdmin: user.platformAdmin };
   }
   @Get('me')
   async me(@Actor() ctx: Context) {
     return this.db.user.findUnique({
       where: { id: ctx.userId },
-      select: { id: true, fullName: true, email: true,platformAdmin:true, memberships:{include:{organization:{include:{subscription:{include:{plan:true}}}}}},roles: { include: { campus: {include:{organization:{include:{subscription:{include:{plan:true}}}}}} } } },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        platformAdmin: true,
+        memberships: {
+          include: { organization: { include: { subscription: { include: { plan: true } } } } },
+        },
+        roles: {
+          include: {
+            campus: {
+              include: { organization: { include: { subscription: { include: { plan: true } } } } },
+            },
+          },
+        },
+      },
     });
   }
   @Post('logout')

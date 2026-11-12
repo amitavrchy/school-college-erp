@@ -36,7 +36,7 @@ export const Roles = (...roles: Role[]) => SetMetadata('roles', roles);
 export const PlatformOnly = () => SetMetadata('platformOnly', true);
 export const AccountAccess = () => SetMetadata('accountAccess', true);
 export const BillingAccess = () => SetMetadata('billingAccess', true);
-export const Feature = (name:string) => SetMetadata('feature', name);
+export const Feature = (name: string) => SetMetadata('feature', name);
 export interface Context {
   userId: string;
   campusId: string;
@@ -71,32 +71,56 @@ export class AccessGuard implements CanActivate {
     }
     const user = await this.db.user.findUnique({
       where: { id: claims.sub },
-      include: { roles: {include:{campus:true}} },
+      include: { roles: { include: { campus: true } } },
     });
     if (!user?.active || user.tokenVersion !== claims.v)
       throw new UnauthorizedException('Session expired');
-    const targets=[context.getHandler(),context.getClass()];
-    const platform=this.reflector.getAllAndOverride<boolean>('platformOnly',targets);
-    const account=this.reflector.getAllAndOverride<boolean>('accountAccess',targets);
-    const billing=this.reflector.getAllAndOverride<boolean>('billingAccess',targets);
-    if(platform){
-      if(!user.platformAdmin)throw new ForbiddenException('Platform administrator access is required');
-      req.actor={userId:user.id,campusId:'',orgId:'',roles:[],fullName:user.fullName,platformAdmin:true} satisfies Context;return true;
+    const targets = [context.getHandler(), context.getClass()];
+    const platform = this.reflector.getAllAndOverride<boolean>('platformOnly', targets);
+    const account = this.reflector.getAllAndOverride<boolean>('accountAccess', targets);
+    const billing = this.reflector.getAllAndOverride<boolean>('billingAccess', targets);
+    if (platform) {
+      if (!user.platformAdmin)
+        throw new ForbiddenException('Platform administrator access is required');
+      req.actor = {
+        userId: user.id,
+        campusId: '',
+        orgId: '',
+        roles: [],
+        fullName: user.fullName,
+        platformAdmin: true,
+      } satisfies Context;
+      return true;
     }
     const campusId = req.headers['x-campus-id'] || user.roles[0]?.campusId;
     const roles = user.roles.filter((r) => r.campusId === campusId).map((r) => r.role as Role);
-    if (!roles.length && !account) throw new ForbiddenException('You do not have access to this campus');
-    const orgId=user.roles.find(r=>r.campusId===campusId)?.campus.orgId||'';
-    if(!account && !await this.db.organizationMember.findUnique({where:{organizationId_userId:{organizationId:orgId,userId:user.id}}}))throw new ForbiddenException('You are not a member of this institution');
+    if (!roles.length && !account)
+      throw new ForbiddenException('You do not have access to this campus');
+    const orgId = user.roles.find((r) => r.campusId === campusId)?.campus.orgId || '';
+    if (
+      !account &&
+      !(await this.db.organizationMember.findUnique({
+        where: { organizationId_userId: { organizationId: orgId, userId: user.id } },
+      }))
+    )
+      throw new ForbiddenException('You are not a member of this institution');
     const required = this.reflector.getAllAndOverride<Role[]>('roles', [
       context.getHandler(),
       context.getClass(),
     ]);
-    req.actor = { userId: user.id, campusId:campusId||'',orgId, roles, fullName: user.fullName,platformAdmin:user.platformAdmin } satisfies Context;
+    req.actor = {
+      userId: user.id,
+      campusId: campusId || '',
+      orgId,
+      roles,
+      fullName: user.fullName,
+      platformAdmin: user.platformAdmin,
+    } satisfies Context;
     if (required && !hasRole(req.actor, required))
       throw new ForbiddenException('Your role cannot perform this action');
-    const feature=this.reflector.getAllAndOverride<string>('feature',targets);
-    if(!account&&!billing&&(feature||!['GET','HEAD','OPTIONS'].includes(req.method)))await requireSubscription(this.db,orgId,feature);
+    const feature = this.reflector.getAllAndOverride<string>('feature', targets);
+    if (!account && !billing && (feature || !['GET', 'HEAD', 'OPTIONS'].includes(req.method)))
+      await requireSubscription(this.db, orgId, feature);
     return true;
   }
 }

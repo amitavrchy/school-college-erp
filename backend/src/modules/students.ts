@@ -86,7 +86,7 @@ export class StudentsController {
     const section = await this.scope.section(c, v.sectionId, true);
     const { sectionId, ...data } = v;
     const student = await this.db.serial(async (tx) => {
-      await requireQuota(tx,c.orgId,'students');
+      await requireQuota(tx, c.orgId, 'students');
       await tx.$queryRaw`SELECT id FROM "Section" WHERE id = ${sectionId} FOR UPDATE`;
       const count = await tx.enrollment.count({ where: { sectionId, status: 'ACTIVE' } });
       if (count >= section.capacity)

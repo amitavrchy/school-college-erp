@@ -29,6 +29,13 @@ export class Realtime implements OnGatewayConnection {
       if (!user.active || user.tokenVersion !== claims.v) throw new Error('Expired');
       const campusId = socket.handshake.auth.campusId;
       if (!user.roles.some((r) => r.campusId === campusId)) throw new Error('Forbidden');
+      const campus = await this.db.campus.findUniqueOrThrow({ where: { id: campusId } });
+      if (
+        !(await this.db.organizationMember.findUnique({
+          where: { organizationId_userId: { organizationId: campus.orgId, userId: user.id } },
+        }))
+      )
+        throw new Error('Membership revoked');
       socket.join(`user:${user.id}`);
       if (
         user.roles.some((r) => r.campusId === campusId && !['GUARDIAN', 'STUDENT'].includes(r.role))

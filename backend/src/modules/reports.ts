@@ -11,10 +11,11 @@ export class ReportsController {
     @Inject(Scope) private scope: Scope,
   ) {}
   @Get('reports/dashboard')
-  @Roles(...TEACHING, 'ACCOUNTS', 'ADMISSION_OFFICER','LIBRARIAN','TRANSPORT_MANAGER')
+  @Roles(...TEACHING, 'ACCOUNTS', 'ADMISSION_OFFICER', 'LIBRARIAN', 'TRANSPORT_MANAGER')
   async dashboard(@Actor() c: Context) {
-    const day = new Date(today());
-    const start = new Date(`${today().slice(0, 7)}-01`);
+    const localDate = today();
+    const day = new Date(localDate);
+    const start = new Date(`${localDate.slice(0, 7)}-01T00:00:00+06:00`);
     const [students, teachers, attendance, invoices, payments, applications, activity, sections] =
       await Promise.all([
         this.db.student.count({ where: { campusId: c.campusId } }),
@@ -32,7 +33,11 @@ export class ReportsController {
           where: { student: { campusId: c.campusId }, status: { in: ['DUE', 'PARTIAL'] } },
         }),
         this.db.payment.findMany({
-          where: { student: { campusId: c.campusId }, status: 'SUCCESS', paidAt: { gte: start } },
+          where: {
+            student: { campusId: c.campusId },
+            status: 'SUCCESS',
+            paidAt: { gte: start, lte: new Date() },
+          },
           orderBy: { paidAt: 'asc' },
         }),
         this.db.admissionApplication.groupBy({
@@ -58,8 +63,8 @@ export class ReportsController {
       present = attendance
         .filter((a) => ['PRESENT', 'LATE'].includes(a.status))
         .reduce((s, a) => s + a._count, 0);
-    const collection = Array.from({ length: new Date().getUTCDate() }, (_, i) => {
-      const key = `${today().slice(0, 7)}-${String(i + 1).padStart(2, '0')}`;
+    const collection = Array.from({ length: Number(localDate.slice(-2)) }, (_, i) => {
+      const key = `${localDate.slice(0, 7)}-${String(i + 1).padStart(2, '0')}`;
       return {
         day: String(i + 1),
         amount: payments

@@ -7,7 +7,7 @@ export class Scope {
   constructor(@Inject(Db) private db: Db) {}
   studentFilter(ctx: Context): Prisma.StudentWhereInput {
     const base = { campusId: ctx.campusId };
-    if (hasRole(ctx, [...FINANCE, ...ADMISSIONS,'LIBRARIAN','TRANSPORT_MANAGER'])) return base;
+    if (hasRole(ctx, [...FINANCE, ...ADMISSIONS, 'LIBRARIAN', 'TRANSPORT_MANAGER'])) return base;
     if (hasRole(ctx, ['TEACHER', 'CLASS_TEACHER']))
       return {
         ...base,
