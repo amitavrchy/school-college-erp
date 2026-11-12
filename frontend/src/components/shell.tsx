@@ -29,6 +29,7 @@ import {
   NotebookPen,
   LifeBuoy,
   CreditCard,
+  Globe,
 } from 'lucide-react';
 import { api, post } from '@/lib/api';
 import { State } from './ui';
@@ -47,6 +48,7 @@ const CampusContext = createContext<AppContext>(null!);
 export const useCampus = () => useContext(CampusContext);
 const admins = ['SUPER_ADMIN', 'CAMPUS_ADMIN', 'PRINCIPAL'];
 const nav = [
+  { href: '/website', label: 'School website', icon: Globe, roles: admins, group: 'MANAGEMENT' },
   {
     href: '/overview',
     label: 'Overview',

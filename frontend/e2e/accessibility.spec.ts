@@ -5,12 +5,13 @@ test('public pages and advanced workspaces pass automated accessibility checks',
   page,
 }) => {
   test.setTimeout(180_000);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   async function audit(path: string) {
     await page.goto(path);
     await expect(page.locator('h1').first()).toBeVisible();
     // Wait for API-backed content before scanning rather than auditing skeletons.
     await expect(page.getByText('Loading your workspace…', { exact: true })).toHaveCount(0);
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
       .analyze();
