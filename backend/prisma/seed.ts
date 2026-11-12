@@ -375,7 +375,7 @@ async function seed() {
       },
     });
   }
-  await seedSaas(db,process.env.SEED_PASSWORD!);
+  await seedSaas(db, process.env.SEED_PASSWORD!);
   console.log(
     'Seed complete: 2 campuses, 200 students, sample accounts, fees, results and attendance.',
   );

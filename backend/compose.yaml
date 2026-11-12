@@ -44,6 +44,8 @@ services:
       SMS_API_KEY: ${SMS_API_KEY:-}
       SMS_SENDER_ID: ${SMS_SENDER_ID:-}
       SEED_PASSWORD: ${SEED_PASSWORD:-}
+      PLATFORM_ADMIN_EMAIL: ${PLATFORM_ADMIN_EMAIL:-platform@campusone.edu.bd}
+      PLATFORM_SEED_PASSWORD: ${PLATFORM_SEED_PASSWORD:-}
       FEE_FINE_PER_DAY_MINOR: ${FEE_FINE_PER_DAY_MINOR:-1000}
       ADMISSION_OFFER_HOURS: ${ADMISSION_OFFER_HOURS:-48}
       SIBLING_DISCOUNT_BPS: ${SIBLING_DISCOUNT_BPS:-0}
@@ -71,7 +73,18 @@ services:
     environment:
       API_INTERNAL_URL: http://api:4000
       NODE_ENV: production
-    ports: ['3000:3000']
+    ports: ['${WEB_BIND:-127.0.0.1}:${WEB_PORT:-3000}:3000']
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://localhost:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
     depends_on:
       api: { condition: service_healthy }
 volumes:
