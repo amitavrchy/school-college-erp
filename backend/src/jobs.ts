@@ -4,6 +4,8 @@ import IORedis from 'ioredis';
 import { Db } from './db';
 import { config } from './config';
 import { today } from './common';
+import { createHash } from 'node:crypto';
+import { HttpException, ServiceUnavailableException } from '@nestjs/common';
 import { lateFine } from './domain/fees';
 import { Realtime } from './realtime';
 import { Billing } from './modules/billing';
@@ -23,6 +25,34 @@ export class Jobs implements OnModuleInit, OnModuleDestroy {
   async ping() {
     if (this.connection.status !== 'ready') throw new Error('Job storage is unavailable');
     return this.connection.ping();
+  }
+  async publicLimit(key: string, limit: number, seconds: number) {
+    if (this.connection.status !== 'ready')
+      throw new ServiceUnavailableException('Please try again shortly');
+    const hashed = createHash('sha256').update(key).digest('hex');
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let count: number;
+    try {
+      count = Number(
+        await Promise.race([
+          this.connection.eval(
+            "local n=redis.call('INCR',KEYS[1]); if n==1 then redis.call('EXPIRE',KEYS[1],ARGV[1]); end; return n",
+            1,
+            `school-public:${hashed}`,
+            seconds,
+          ),
+          new Promise((_, reject) => {
+            timer = setTimeout(
+              () => reject(new ServiceUnavailableException('Please try again shortly')),
+              2500,
+            );
+          }),
+        ]),
+      );
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+    if (count > limit) throw new HttpException('Too many attempts. Please try again later.', 429);
   }
   constructor(
     @Inject(Db) private db: Db,

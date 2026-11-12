@@ -32,7 +32,7 @@ async function main() {
     '/api',
     rateLimit({
       windowMs: 60_000,
-      limit: 300,
+      limit: (req) => (req.originalUrl.startsWith('/api/public-websites/') ? 3000 : 300),
       standardHeaders: 'draft-8',
       legacyHeaders: false,
       keyGenerator: (req) => requestBucket(req, jwt),
@@ -69,6 +69,7 @@ async function main() {
       req.headers.origin &&
       !origins.includes(req.headers.origin) &&
       !req.path.startsWith('/api/payments/webhooks/') &&
+      !req.path.startsWith('/api/public-websites/') &&
       req.path !== '/api/payments/return'
     )
       return res.status(403).json({ message: 'Request origin is not allowed' });

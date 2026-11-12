@@ -239,6 +239,69 @@ model Organization {
   subscriptionPayments SubscriptionPayment[]
   subscriptionEvents SubscriptionEvent[]
   tickets SupportTicket[]
+  website SchoolWebsite?
+}
+model SchoolWebsite {
+  id String @id @default(cuid())
+  organizationId String @unique
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subdomain String @unique
+  draft Json
+  published Json?
+  revision Int @default(1)
+  publishedRevision Int?
+  publishedAt DateTime?
+  updatedAt DateTime @updatedAt
+  revisions WebsiteRevision[]
+  domains WebsiteDomain[]
+  assets WebsiteAsset[]
+  inquiries WebsiteInquiry[]
+}
+model WebsiteRevision {
+  id String @id @default(cuid())
+  websiteId String
+  website SchoolWebsite @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  version Int
+  content Json
+  actorId String
+  createdAt DateTime @default(now())
+  @@unique([websiteId, version])
+}
+model WebsiteDomain {
+  id String @id @default(cuid())
+  websiteId String
+  website SchoolWebsite @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  hostname String
+  verificationToken String
+  status String @default("PENDING")
+  verifiedAt DateTime?
+  checkedAt DateTime?
+  createdAt DateTime @default(now())
+  @@unique([websiteId, hostname])
+  @@index([hostname, status])
+}
+model WebsiteAsset {
+  id String @id @default(cuid())
+  websiteId String
+  website SchoolWebsite @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  fileName String
+  mimeType String
+  size Int
+  content Bytes
+  createdAt DateTime @default(now())
+}
+model WebsiteInquiry {
+  id String @id @default(cuid())
+  websiteId String
+  website SchoolWebsite @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  name String
+  email String
+  phone String?
+  message String
+  status String @default("NEW")
+  note String?
+  createdAt DateTime @default(now())
+  @@index([websiteId, createdAt])
 }
 model Campus {
   id String @id @default(cuid())

@@ -32,6 +32,9 @@ import { TransportController } from './modules/transport';
 import { HomeworkController } from './modules/homework';
 import { SupportController } from './modules/support';
 import { HealthController } from './health';
+import { Websites } from './websites/service';
+import { WebsiteResults } from './websites/results';
+import { WebsiteController, PublicWebsitesController } from './websites/controllers';
 @Module({
   imports: [
     JwtModule.register({
@@ -44,6 +47,8 @@ import { HealthController } from './health';
   controllers: [
     AuthController,
     HealthController,
+    WebsiteController,
+    PublicWebsitesController,
     CampusesController,
     AcademicsController,
     StudentsController,
@@ -67,6 +72,8 @@ import { HealthController } from './health';
   ],
   providers: [
     Db,
+    Websites,
+    WebsiteResults,
     Saas,
     Audit,
     Scope,
