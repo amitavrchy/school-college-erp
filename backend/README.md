@@ -52,6 +52,8 @@ Default demo password: `CampusOne!2026` (`SEED_PASSWORD`). Platform owner suppor
 
 ## Implemented product
 
+School website CMS is available at /website: page blocks, themes, media, public updates, school subdomains/custom domains and published-result lookup. See the [complete feature checklist and domain setup](docs/SCHOOL-WEBSITES.md).
+
 - Landing page with live plan prices, annual/monthly pricing, responsive navigation, feature previews, FAQ and institutional signup.
 - Independent tenants and campus memberships; trials, plan feature gates, student/staff/campus quotas and expired-subscription read-only access.
 - Platform console for institution status, payment review, idempotent manual activation, editable plans and receiving accounts. Tenant billing includes usage, history and PDF receipts.

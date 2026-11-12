@@ -51,6 +51,8 @@ services:
       SIBLING_DISCOUNT_BPS: ${SIBLING_DISCOUNT_BPS:-0}
       FEE_REMINDERS_ENABLED: ${FEE_REMINDERS_ENABLED:-false}
       DOCUMENT_ENCRYPTION_KEY: ${DOCUMENT_ENCRYPTION_KEY:-}
+      SCHOOL_SITE_BASE_DOMAIN: ${SCHOOL_SITE_BASE_DOMAIN:-localhost}
+      SCHOOL_SITE_CNAME_TARGET: ${SCHOOL_SITE_CNAME_TARGET:-}
     ports: ['127.0.0.1:4000:4000']
     depends_on:
       postgres: { condition: service_healthy }
@@ -72,6 +74,7 @@ services:
       dockerfile: Dockerfile
     environment:
       API_INTERNAL_URL: http://api:4000
+      APP_URL: ${APP_URL:-http://localhost:3000}
       NODE_ENV: production
     ports: ['${WEB_BIND:-127.0.0.1}:${WEB_PORT:-3000}:3000']
     healthcheck:
@@ -87,6 +90,20 @@ services:
       retries: 20
     depends_on:
       api: { condition: service_healthy }
+  edge:
+    image: caddy:2-alpine
+    profiles: ['edge']
+    environment:
+      PLATFORM_DOMAIN: ${PLATFORM_DOMAIN:-localhost}
+    ports: ['80:80', '443:443', '443:443/udp']
+    volumes:
+      - ./setup/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      web: { condition: service_healthy }
 volumes:
   postgres-data:
   redis-data:
+  caddy-data:
+  caddy-config:

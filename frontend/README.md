@@ -7,3 +7,5 @@ Run `npm ci`, then `npm run dev` after starting the backend. Default URL: http:/
 Checks: `npm run typecheck`, `npm run build`, `npm run format:check` and `npm run test:e2e`. Browser tests require Chrome and a seeded dedicated backend. Combined release verification: `node ../backend/setup/verify.mjs --integration`.
 
 See [installation, accounts and production setup](../backend/README.md).
+
+School website CMS: /website. Public schools: /school/SUBDOMAIN or the school's configured host. See the [feature checklist and DNS/HTTPS guide](../backend/docs/SCHOOL-WEBSITES.md). The browser suite covers CMS publishing, private previews, results/PDFs, enquiries and local subdomain routing.
