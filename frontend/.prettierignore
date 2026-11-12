@@ -11,3 +11,6 @@ test-results
 playwright-report
 .env
 artifacts
+
+next-env.d.ts
+AGENTS.md
