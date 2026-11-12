@@ -448,14 +448,14 @@ export default function Landing() {
           <div className="school-wrap school-people-grid">
             <figure className="school-life-photo" data-reveal>
               <img
-                src="/images/school/school-life.webp"
-                alt="Pupils reading together at a wooden desk in a Friendship school in Bangladesh"
+                src="/images/school/campus.webp"
+                alt="The landscaped courtyard and modern administration building at International School Dhaka"
                 width="1200"
                 height="900"
                 loading="lazy"
               />
               <figcaption>
-                <span lang="bn">শিক্ষাই আগামীর ভিত্তি।</span>
+                <span>A place to learn. A place to belong.</span>
                 <span>For the classroom. And everyone behind it.</span>
               </figcaption>
             </figure>
@@ -693,9 +693,9 @@ export default function Landing() {
                 <a href="https://commons.wikimedia.org/wiki/File:Class_Room_International_Bangladesh_Hope_School.jpg">
                   Jubair1985
                 </a>
-                . Friendship School:{' '}
-                <a href="https://commons.wikimedia.org/wiki/File:Friendship_School_2025_(2).jpg">
-                  Aashaa
+                . Campus photograph:{' '}
+                <a href="https://commons.wikimedia.org/wiki/File:ISD_Admin_Building.jpg">
+                  Sochi Brota Basak Shuvo
                 </a>
                 . Both <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>;
                 resized, WebP conversion and display crops. Photographs show school life, not
