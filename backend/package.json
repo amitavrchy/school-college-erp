@@ -4,9 +4,9 @@
   "private": true,
   "scripts": {
     "setup": "node setup/setup-env.mjs",
-    "dev": "node init && node --env-file-if-exists=.env --import tsx --watch src/main.ts",
-    "build": "node init && tsc -p tsconfig.json",
-    "start": "node init && node dist/main.js",
+    "dev": "node --env-file-if-exists=.env --import tsx --watch src/main.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.tooling.json",
     "test": "tsx --test test/domain.test.ts test/security.test.ts test/websites-unit.test.ts",
     "db:generate": "prisma generate",
