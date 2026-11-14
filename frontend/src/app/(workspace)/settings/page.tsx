@@ -34,7 +34,8 @@ export default function Settings() {
     academic = can('SUPER_ADMIN', 'CAMPUS_ADMIN', 'PRINCIPAL');
   const { data: users, reload } = useData(admin ? 'users' : null),
     { data: campuses, reload: reloadCampuses } = useData('campuses'),
-    { data: holidays, reload: reloadHolidays } = useData('holidays');
+    { data: holidays, reload: reloadHolidays } = useData('holidays'),
+    { data: policy, reload: reloadPolicy } = useData(admin ? 'settings' : null);
   const [tab, setTab] = useState('Campus'),
     [modal, setModal] = useState(''),
     [toast, setToast] = useState(''),
@@ -142,11 +143,13 @@ export default function Settings() {
       <Panel>
         <div className="toolbar">
           <div className="segmented">
-            {['Campus', ...(admin ? ['Users'] : []), 'Calendar', 'Account'].map((t) => (
-              <button key={t} className={tab === t ? 'selected' : ''} onClick={() => setTab(t)}>
-                {t}
-              </button>
-            ))}
+            {['Campus', ...(admin ? ['Users', 'School policy'] : []), 'Calendar', 'Account'].map(
+              (t) => (
+                <button key={t} className={tab === t ? 'selected' : ''} onClick={() => setTab(t)}>
+                  {t}
+                </button>
+              ),
+            )}
           </div>
           {tab === 'Users' && admin && (
             <Button onClick={() => setModal('user')}>
@@ -310,6 +313,81 @@ export default function Settings() {
               </tbody>
             </table>
           </div>
+        ) : tab === 'School policy' && policy ? (
+          <div style={{ padding: '0 24px 24px' }}>
+            <div className="panel-head" style={{ padding: '0 0 12px' }}>
+              <h2>Fees, admissions and documents</h2>
+              <Button variant="secondary" onClick={() => setModal('policy')}>
+                Edit policy
+              </Button>
+            </div>
+            <dl className="policy-list">
+              <dt>Late fine</dt>
+              <dd>
+                {policy.lateFineMode === 'NONE'
+                  ? 'No late fine'
+                  : policy.lateFineMode === 'FLAT'
+                    ? `৳${policy.lateFineFlatMinor / 100} once overdue`
+                    : `৳${policy.lateFinePerDayMinor / 100} per day`}
+                {policy.lateFineMode !== 'NONE' && ` · capped at ৳${policy.lateFineCapMinor / 100}`}
+              </dd>
+              <dt>Monthly invoices due on</dt>
+              <dd>Day {policy.invoiceDueDay} of the month</dd>
+              <dt>Sibling discount</dt>
+              <dd>{policy.siblingDiscountBps / 100}% on fee heads marked for sibling discount</dd>
+              <dt>Fee reminders by SMS</dt>
+              <dd>
+                {policy.feeRemindersEnabled
+                  ? `On · ${policy.reminderDaysBefore} days before and on the due date`
+                  : 'Off'}
+              </dd>
+              <dt>Seat offer validity</dt>
+              <dd>{policy.admissionOfferHours} hours</dd>
+              <dt>Waivers needing the Principal</dt>
+              <dd>Above ৳{policy.waiverPrincipalThresholdMinor / 100}</dd>
+              <dt>Name in Bangla</dt>
+              <dd>{policy.institutionNameBn || '—'}</dd>
+              <dt>EIIN</dt>
+              <dd>{policy.eiin || '—'}</dd>
+              <dt>Address and contact</dt>
+              <dd>
+                {[policy.address, policy.phone, policy.email].filter(Boolean).join(' · ') || '—'}
+              </dd>
+              <dt>Principal</dt>
+              <dd>{policy.principalName || '—'}</dd>
+              <dt>Receipt footer</dt>
+              <dd>{policy.receiptFooter || '—'}</dd>
+              <dt>Logo on receipts and report cards</dt>
+              <dd>
+                {policy.hasLogo ? 'Uploaded' : 'Not uploaded'}{' '}
+                <label className="link-button" style={{ display: 'inline' }}>
+                  {policy.hasLogo ? 'Replace' : 'Upload'} (PNG or JPEG, under 300 KB)
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg"
+                    hidden
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      try {
+                        const content = await new Promise<string>((resolve, reject) => {
+                          const reader = new FileReader();
+                          reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+                          reader.onerror = () => reject(new Error('Could not read the file'));
+                          reader.readAsDataURL(file);
+                        });
+                        await post('settings/logo', { mimeType: file.type, content });
+                        await reloadPolicy();
+                        setToast('Logo saved');
+                      } catch (err) {
+                        setToast((err as Error).message);
+                      }
+                    }}
+                  />
+                </label>
+              </dd>
+            </dl>
+          </div>
         ) : tab === 'Calendar' ? (
           <div className="table-wrap">
             <table>
@@ -409,7 +487,169 @@ export default function Settings() {
           </div>
         </Modal>
       )}
-      {modal === 'roles' && selected ? (
+      {modal === 'policy' && policy ? (
+        <FormModal
+          title="School policy"
+          onClose={() => setModal('')}
+          fields={[
+            {
+              key: 'lateFineMode',
+              label: 'Late fine',
+              defaultValue: policy.lateFineMode,
+              options: [
+                { value: 'NONE', label: 'No late fine' },
+                { value: 'PER_DAY', label: 'Per day overdue' },
+                { value: 'FLAT', label: 'One fixed amount once overdue' },
+              ],
+            },
+            {
+              key: 'lateFinePerDay',
+              label: 'Fine per day (BDT)',
+              type: 'number',
+              min: 0,
+              step: '0.01',
+              defaultValue: policy.lateFinePerDayMinor / 100,
+            },
+            {
+              key: 'lateFineFlat',
+              label: 'Fixed fine (BDT)',
+              type: 'number',
+              min: 0,
+              step: '0.01',
+              defaultValue: policy.lateFineFlatMinor / 100,
+            },
+            {
+              key: 'lateFineCap',
+              label: 'Maximum fine per invoice (BDT)',
+              type: 'number',
+              min: 0,
+              step: '0.01',
+              defaultValue: policy.lateFineCapMinor / 100,
+            },
+            {
+              key: 'invoiceDueDay',
+              label: 'Monthly invoices due on day (1–28)',
+              type: 'number',
+              min: 1,
+              max: 28,
+              defaultValue: policy.invoiceDueDay,
+            },
+            {
+              key: 'siblingDiscount',
+              label: 'Sibling discount (%)',
+              type: 'number',
+              min: 0,
+              max: 100,
+              step: '0.01',
+              defaultValue: policy.siblingDiscountBps / 100,
+            },
+            {
+              key: 'feeRemindersEnabled',
+              label: 'Fee reminders by SMS',
+              defaultValue: policy.feeRemindersEnabled ? 'yes' : 'no',
+              options: [
+                { value: 'no', label: 'Off' },
+                { value: 'yes', label: 'On' },
+              ],
+            },
+            {
+              key: 'reminderDaysBefore',
+              label: 'Remind this many days before the due date',
+              type: 'number',
+              min: 0,
+              max: 30,
+              defaultValue: policy.reminderDaysBefore,
+            },
+            {
+              key: 'admissionOfferHours',
+              label: 'Seat offer validity (hours)',
+              type: 'number',
+              min: 1,
+              max: 720,
+              defaultValue: policy.admissionOfferHours,
+            },
+            {
+              key: 'waiverThreshold',
+              label: 'Waivers above this need the Principal (BDT)',
+              type: 'number',
+              min: 0,
+              step: '0.01',
+              defaultValue: policy.waiverPrincipalThresholdMinor / 100,
+            },
+            {
+              key: 'institutionNameBn',
+              label: 'Institution name in Bangla',
+              required: false,
+              defaultValue: policy.institutionNameBn || '',
+            },
+            {
+              key: 'eiin',
+              label: 'EIIN (6 digits)',
+              required: false,
+              defaultValue: policy.eiin || '',
+            },
+            {
+              key: 'address',
+              label: 'Address on documents',
+              required: false,
+              defaultValue: policy.address || '',
+            },
+            {
+              key: 'phone',
+              label: 'Phone on documents',
+              required: false,
+              defaultValue: policy.phone || '',
+            },
+            {
+              key: 'email',
+              label: 'Email on documents',
+              type: 'email',
+              required: false,
+              defaultValue: policy.email || '',
+            },
+            {
+              key: 'principalName',
+              label: 'Principal’s name (signature line)',
+              required: false,
+              defaultValue: policy.principalName || '',
+            },
+            {
+              key: 'receiptFooter',
+              label: 'Receipt footer',
+              required: false,
+              defaultValue: policy.receiptFooter || '',
+            },
+          ]}
+          onSubmit={async (v) => {
+            const taka = (n: unknown) => Math.round(Number(n) * 100);
+            await post(
+              'settings',
+              {
+                lateFineMode: v.lateFineMode,
+                lateFinePerDayMinor: taka(v.lateFinePerDay),
+                lateFineFlatMinor: taka(v.lateFineFlat),
+                lateFineCapMinor: taka(v.lateFineCap),
+                invoiceDueDay: Number(v.invoiceDueDay),
+                siblingDiscountBps: Math.round(Number(v.siblingDiscount) * 100),
+                feeRemindersEnabled: v.feeRemindersEnabled === 'yes',
+                reminderDaysBefore: Number(v.reminderDaysBefore),
+                admissionOfferHours: Number(v.admissionOfferHours),
+                waiverPrincipalThresholdMinor: taka(v.waiverThreshold),
+                institutionNameBn: v.institutionNameBn || null,
+                eiin: v.eiin || null,
+                address: v.address || null,
+                phone: v.phone || null,
+                email: v.email || null,
+                principalName: v.principalName || null,
+                receiptFooter: v.receiptFooter || null,
+              },
+              'PATCH',
+            );
+            await reloadPolicy();
+            setToast('School policy saved');
+          }}
+        />
+      ) : modal === 'roles' && selected ? (
         <FormModal
           title={`Change role for ${selected.fullName}`}
           submitLabel="Save role"

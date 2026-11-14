@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Inject, Post, Query, ForbiddenException } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  ForbiddenException,
+  Get,
+  Inject,
+  NotFoundException,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { z } from 'zod';
 import { Db } from '../db';
 import { Actor, Context, Roles, ADMIN, ACADEMIC, hasRole } from '../auth/access';
@@ -160,20 +171,75 @@ export class AcademicsController {
       }),
       body,
     );
-    await this.scope.section(c, v.sectionId, true);
+    const section = await this.scope.section(c, v.sectionId, true);
     await this.db.sectionSubjectTeacher.findFirstOrThrow({
       where: { sectionId: v.sectionId, subjectId: v.subjectId, teacherId: v.teacherId },
     });
+    const data = { ...v, sessionId: section.sessionId };
     return this.db.timetableSlot.upsert({
       where: {
-        sectionId_dayOfWeek_period: {
+        sessionId_sectionId_dayOfWeek_period: {
+          sessionId: section.sessionId,
           sectionId: v.sectionId,
           dayOfWeek: v.dayOfWeek,
           period: v.period,
         },
       },
-      create: v,
-      update: v,
+      create: data,
+      update: data,
     });
+  }
+  @Delete('timetable/:id')
+  @Roles(...ACADEMIC)
+  async removeSlot(@Actor() c: Context, @Param('id') slotId: string) {
+    const slot = await this.db.timetableSlot.findFirst({
+      where: { id: slotId, section: { schoolClass: { campusId: c.campusId } } },
+    });
+    if (!slot) throw new NotFoundException('Record not found');
+    await this.scope.section(c, slot.sectionId, true);
+    await this.db.timetableSlot.delete({ where: { id: slot.id } });
+    return { ok: true };
+  }
+  /**
+   * Copies a section's routine (typically last session's) into another section. Slots are kept
+   * only where the target section has a teacher for that subject and nobody is double-booked.
+   */
+  @Post('timetable/copy')
+  @Roles(...ACADEMIC)
+  async copyTimetable(@Actor() c: Context, @Body() body: unknown) {
+    const v = parse(z.object({ fromSectionId: id, toSectionId: id }), body);
+    await this.scope.section(c, v.fromSectionId);
+    const target = await this.scope.section(c, v.toSectionId, true);
+    const [slots, assignments] = await Promise.all([
+      this.db.timetableSlot.findMany({ where: { sectionId: v.fromSectionId } }),
+      this.db.sectionSubjectTeacher.findMany({ where: { sectionId: v.toSectionId } }),
+    ]);
+    const teacherFor = new Map(assignments.map((a) => [a.subjectId, a.teacherId]));
+    let copied = 0,
+      skipped = 0;
+    for (const s of slots) {
+      const teacherId = teacherFor.get(s.subjectId);
+      if (!teacherId) {
+        skipped++;
+        continue;
+      }
+      const result = await this.db.timetableSlot.createMany({
+        data: [
+          {
+            sessionId: target.sessionId,
+            sectionId: v.toSectionId,
+            subjectId: s.subjectId,
+            teacherId,
+            dayOfWeek: s.dayOfWeek,
+            period: s.period,
+            room: s.room,
+          },
+        ],
+        skipDuplicates: true,
+      });
+      if (result.count) copied++;
+      else skipped++;
+    }
+    return { copied, skipped };
   }
 }

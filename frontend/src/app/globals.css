@@ -2253,3 +2253,25 @@ label {
 .mfa-banner {
   margin: 0 0 18px;
 }
+.policy-list {
+  display: grid;
+  grid-template-columns: minmax(160px, 260px) 1fr;
+  gap: 10px 20px;
+  margin: 0;
+}
+.policy-list dt {
+  color: var(--muted);
+}
+.policy-list dd {
+  margin: 0;
+  font-weight: 500;
+}
+@media (max-width: 640px) {
+  .policy-list {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+  .policy-list dd {
+    margin-bottom: 10px;
+  }
+}

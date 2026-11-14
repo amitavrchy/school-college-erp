@@ -13,7 +13,9 @@ export default function StudentDetail() {
   const { data: s, error, loading, reload } = useData(`students/${id}`);
   const manage = can('SUPER_ADMIN', 'CAMPUS_ADMIN', 'PRINCIPAL');
   const { data: users } = useData(can('SUPER_ADMIN', 'CAMPUS_ADMIN') ? 'users' : null);
-  const [link, setLink] = useState(false),
+  const editor = can('SUPER_ADMIN', 'CAMPUS_ADMIN', 'PRINCIPAL', 'ADMISSION_OFFICER');
+  const [edit, setEdit] = useState(false),
+    [link, setLink] = useState(false),
     [transfer, setTransfer] = useState(false),
     [toast, setToast] = useState('');
   if (!s) return <State loading={loading} error={error} onRetry={reload} />;
@@ -37,6 +39,11 @@ export default function StudentDetail() {
           <Download size={16} />
           Report card
         </Button>
+        {editor && (
+          <Button variant="secondary" onClick={() => setEdit(true)}>
+            Edit profile
+          </Button>
+        )}
         {manage && s.enrollments.some((e: any) => e.status === 'ACTIVE') && (
           <Button variant="secondary" onClick={() => setTransfer(true)}>
             Transfer campus
@@ -161,6 +168,109 @@ export default function StudentDetail() {
             await post(`students/${id}/guardians`, { ...v, isPrimary: s.guardians.length === 0 });
             await reload();
             setToast('Guardian linked');
+          }}
+        />
+      )}
+      {edit && (
+        <FormModal
+          title="Edit student profile"
+          onClose={() => setEdit(false)}
+          fields={[
+            { key: 'fullName', label: 'Full name', defaultValue: s.fullName },
+            {
+              key: 'fullNameBn',
+              label: 'Name in Bangla',
+              required: false,
+              defaultValue: s.fullNameBn || '',
+            },
+            { key: 'studentCode', label: 'Student ID', defaultValue: s.studentCode },
+            {
+              key: 'rollNumber',
+              label: 'Roll',
+              required: false,
+              defaultValue: s.enrollments.find((e: any) => e.status === 'ACTIVE')?.rollNumber || '',
+            },
+            {
+              key: 'dob',
+              label: 'Date of birth',
+              type: 'date',
+              required: false,
+              defaultValue: s.dob?.slice(0, 10) || '',
+            },
+            {
+              key: 'gender',
+              label: 'Gender',
+              required: false,
+              defaultValue: s.gender || '',
+              options: ['Male', 'Female', 'Other'].map((v) => ({ value: v, label: v })),
+            },
+            {
+              key: 'bloodGroup',
+              label: 'Blood group',
+              required: false,
+              defaultValue: s.bloodGroup || '',
+              options: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((v) => ({
+                value: v,
+                label: v,
+              })),
+            },
+            {
+              key: 'fatherName',
+              label: "Father's name",
+              required: false,
+              defaultValue: s.fatherName || '',
+            },
+            {
+              key: 'motherName',
+              label: "Mother's name",
+              required: false,
+              defaultValue: s.motherName || '',
+            },
+            {
+              key: 'guardianName',
+              label: 'Guardian name',
+              required: false,
+              defaultValue: s.guardianName || '',
+            },
+            {
+              key: 'guardianPhone',
+              label: 'Guardian mobile',
+              required: false,
+              defaultValue: s.guardianPhone || '',
+            },
+            {
+              key: 'birthRegNo',
+              label: 'Birth registration no. (17 digits)',
+              required: false,
+              defaultValue: s.birthRegNo || '',
+            },
+            {
+              key: 'religion',
+              label: 'Religion',
+              required: false,
+              defaultValue: s.religion || '',
+              options: ['Islam', 'Hinduism', 'Buddhism', 'Christianity', 'Other'].map((v) => ({
+                value: v,
+                label: v,
+              })),
+            },
+            {
+              key: 'presentAddress',
+              label: 'Present address',
+              required: false,
+              defaultValue: s.presentAddress || '',
+            },
+            {
+              key: 'permanentAddress',
+              label: 'Permanent address',
+              required: false,
+              defaultValue: s.permanentAddress || '',
+            },
+          ]}
+          onSubmit={async (v) => {
+            await post(`students/${id}`, v, 'PATCH');
+            await reload();
+            setToast('Profile updated');
           }}
         />
       )}

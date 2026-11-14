@@ -229,6 +229,7 @@ export default function Academics() {
                     <th>Period</th>
                     <th>Subject</th>
                     <th>Room</th>
+                    {manage && <th />}
                   </tr>
                 </thead>
                 <tbody>
@@ -252,6 +253,21 @@ export default function Academics() {
                         <strong>{s.subject.name}</strong>
                       </td>
                       <td>{s.room}</td>
+                      {manage && (
+                        <td className="row-actions">
+                          <Button
+                            variant="ghost"
+                            aria-label={`Remove period ${s.period}`}
+                            onClick={async () => {
+                              if (!window.confirm('Remove this period from the routine?')) return;
+                              await post(`timetable/${s.id}`, undefined, 'DELETE');
+                              await reloadSlots();
+                            }}
+                          >
+                            Remove
+                          </Button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
