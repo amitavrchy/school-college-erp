@@ -37,6 +37,18 @@ Before deploying this release, add to `/opt/apps/erp/.env`:
 
 Deploys now run only after the `CI` workflow passes on `main` (typecheck, unit, integration and browser tests).
 
+## Upgrade notes — background worker and school settings (Stage 2)
+
+- A new `erp-worker` container (same backend image, `node dist/worker.js`) runs notices, daily
+  fines (01:00 Dhaka), monthly billing, fee reminders, seat-offer expiry and SMS delivery. The
+  API container sets `RUN_JOBS=false` and only enqueues. Both need the same `.env`.
+- Fine, discount, due day, reminder, offer window and receipt branding are now per school under
+  Settings → School policy. The old `FEE_FINE_PER_DAY_MINOR`, `SIBLING_DISCOUNT_BPS`,
+  `FEE_REMINDERS_ENABLED` and `ADMISSION_OFFER_HOURS` values remain only as defaults for schools
+  that have not saved a policy.
+- The migration suffixes duplicate roll numbers within a section (e.g. `12-2`) before adding a
+  uniqueness rule, and backfills `TimetableSlot.sessionId` from each slot's section.
+
 ## First admin
 
 Platform owner only (no demo data):

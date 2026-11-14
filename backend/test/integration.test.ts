@@ -149,6 +149,17 @@ test(
       });
       const studentIds = all.map((s) => s.id);
       const ss = sessions.map((s) => s.id);
+      await db.feeHeadCharge.deleteMany({
+        where: { feeHead: { structure: { sessionId: { in: sessions.map((s) => s.id) } } } },
+      });
+      await db.timetableSlot.deleteMany({
+        where: { sessionId: { in: sessions.map((s) => s.id) } },
+      });
+      await db.sectionSubjectTeacher.deleteMany({
+        where: { section: { sessionId: { in: sessions.map((s) => s.id) } } },
+      });
+      await db.receiptCounter.deleteMany({ where: { campusId: { in: campusIds } } });
+      await db.organizationSettings.deleteMany({ where: { organizationId: org.id } });
       await db.paymentAllocation.deleteMany({
         where: { payment: { studentId: { in: studentIds } } },
       });
@@ -307,11 +318,14 @@ test(
         const { Jobs } = await import('../src/jobs');
         const { Billing } = await import('../src/modules/billing');
         const { Notifier } = await import('../src/notify');
+        const { Settings } = await import('../src/settings');
+        const settings = new Settings(db as any);
         const jobs = new Jobs(
           db as any,
           { user() {}, campus() {} } as any,
-          new Billing(db as any),
+          new Billing(db as any, settings),
           new Notifier(),
+          settings,
         );
         scenario.after(() => jobs.onModuleDestroy());
         const enrollmentId = students[0].enrollments[0].id;
@@ -546,6 +560,252 @@ test(
         );
       },
     );
+    await t.test('payment void needs a reason and a second finance approver', async () => {
+      const paid = await request('accounts', a.id, 'payments/intent', {
+        studentId: students[0].id,
+        provider: 'MANUAL',
+        amountMinor: 3000,
+        idempotencyKey: randomUUID(),
+      });
+      assert.equal(paid.status, 201, JSON.stringify(paid.data));
+      assert.match(paid.data.receiptNo, /^A-\d{4}-\d{6}$/);
+      const before = await db.invoice.findMany({ where: { studentId: students[0].id } });
+      const short = await request('accounts', a.id, `payments/${paid.data.id}/void-request`, {
+        reason: 'no',
+      });
+      assert.equal(short.status, 400);
+      assert.equal(
+        (
+          await request('admin', b.id, `payments/${paid.data.id}/void-request`, {
+            reason: 'Counted twice at the counter',
+          })
+        ).status,
+        404,
+        'another campus cannot touch this payment',
+      );
+      assert.equal(
+        (
+          await request('accounts', a.id, `payments/${paid.data.id}/void-request`, {
+            reason: 'Counted twice at the counter',
+          })
+        ).status,
+        201,
+      );
+      assert.equal(
+        (await request('accounts', a.id, `payments/${paid.data.id}/void`, {})).status,
+        403,
+        'the requester cannot approve their own void',
+      );
+      assert.equal(
+        (await request('principal', a.id, `payments/${paid.data.id}/void`, {})).status,
+        201,
+      );
+      const voided = await db.payment.findUniqueOrThrow({ where: { id: paid.data.id } });
+      assert.equal(voided.status, 'VOIDED');
+      const after = await db.invoice.findMany({ where: { studentId: students[0].id } });
+      const paidSum = (rows: typeof after) => rows.reduce((s, i) => s + i.paidMinor, 0);
+      assert.equal(paidSum(before) - paidSum(after), 3000);
+      const receipt = await fetch(`${base}/payments/${paid.data.id}/receipt`, {
+        headers: { Cookie: cookies.accounts, 'x-campus-id': a.id },
+      });
+      assert.equal(receipt.status, 200);
+      assert.equal(
+        Buffer.from(await receipt.arrayBuffer())
+          .subarray(0, 5)
+          .toString(),
+        '%PDF-',
+      );
+    });
+    await t.test('ad-hoc invoices, one-time fees and school fine policy', async () => {
+      const adhoc = await request('accounts', a.id, 'fees/invoices', {
+        studentId: students[0].id,
+        dueDate: day,
+        lines: [{ feeHeadName: 'Exam fee', amountMinor: 50000 }],
+      });
+      assert.equal(adhoc.status, 201, JSON.stringify(adhoc.data));
+      assert.equal(
+        (
+          await request('accounts', a.id, 'fees/invoices', {
+            studentId: students[1].id,
+            dueDate: day,
+            lines: [{ feeHeadName: 'Exam fee', amountMinor: 50000 }],
+          })
+        ).status,
+        404,
+      );
+      const structure = await request('accounts', a.id, 'fees/structures', {
+        sessionId: sessions[0].id,
+        classId: classes[0].id,
+        name: 'One-time fee check',
+        heads: [
+          { name: 'Admission', amountMinor: 5000, frequency: 'ONCE' },
+          { name: 'Tuition', amountMinor: 1000, frequency: 'MONTHLY' },
+        ],
+      });
+      assert.equal(structure.status, 201, JSON.stringify(structure.data));
+      const gen = (month: string) =>
+        request('accounts', a.id, 'fees/generate', {
+          structureId: structure.data.id,
+          dueDate: `${year}-${month}-10`,
+        });
+      assert.equal((await gen('10')).status, 201);
+      // Section A may already be full from the admission scenarios; join a roomier section.
+      const lateSection = await db.section.create({
+        data: { classId: classes[0].id, sessionId: sessions[0].id, name: 'Late', capacity: 5 },
+      });
+      const late = await request('admin', a.id, 'students', {
+        fullName: 'Mid-session admission',
+        studentCode: `${prefix}-late`,
+        sectionId: lateSection.id,
+      });
+      assert.equal(late.status, 201, JSON.stringify(late.data));
+      assert.equal((await gen('11')).status, 201);
+      assert.equal((await gen('11')).data.generated, 0, 'running again creates nothing');
+      const lines = async (studentId: string) =>
+        db.invoiceLine.findMany({
+          where: { invoice: { studentId, generationKey: { startsWith: structure.data.id } } },
+        });
+      const first = await lines(students[0].id);
+      assert.equal(first.filter((l) => l.feeHeadName === 'Admission').length, 1);
+      assert.equal(first.filter((l) => l.feeHeadName === 'Tuition').length, 2);
+      const joiner = await lines(late.data.id);
+      assert.equal(
+        joiner.filter((l) => l.feeHeadName === 'Admission').length,
+        1,
+        'charged once on joining',
+      );
+      // School policy: PER_DAY 10 taka capped at 50 taka, applied by the daily job.
+      assert.equal(
+        (
+          await request(
+            'admin',
+            a.id,
+            'settings',
+            {
+              lateFineMode: 'PER_DAY',
+              lateFinePerDayMinor: 1000,
+              lateFineCapMinor: 5000,
+            },
+            'PATCH',
+          )
+        ).status,
+        200,
+      );
+      assert.equal(
+        (await request('teacher', a.id, 'settings', { lateFineMode: 'NONE' }, 'PATCH')).status,
+        403,
+      );
+      const overdue = await db.invoice.create({
+        data: {
+          studentId: students[0].id,
+          sessionId: sessions[0].id,
+          dueDate: new Date(Date.parse(day) - 3 * 86400000),
+          totalMinor: 9000,
+          lines: { create: { feeHeadName: 'Overdue check', amountMinor: 9000 } },
+        },
+      });
+      const { Jobs } = await import('../src/jobs');
+      const { Billing } = await import('../src/modules/billing');
+      const { Notifier } = await import('../src/notify');
+      const { Settings } = await import('../src/settings');
+      const settings = new Settings(db as any);
+      const jobs = new Jobs(
+        db as any,
+        { user() {}, campus() {} } as any,
+        new Billing(db as any, settings),
+        new Notifier(),
+        settings,
+      );
+      try {
+        await jobs.fines([org.id]);
+        await jobs.fines([org.id]);
+        assert.equal(
+          (await db.invoice.findUniqueOrThrow({ where: { id: overdue.id } })).fineMinor,
+          3000,
+        );
+        await db.feeStructure.update({
+          where: { id: structure.data.id },
+          data: { lastGeneratedMonth: null },
+        });
+        await jobs.monthlyBilling([org.id]);
+        const marked = await db.feeStructure.findUniqueOrThrow({
+          where: { id: structure.data.id },
+        });
+        assert.equal(marked.lastGeneratedMonth, day.slice(0, 7));
+        const count = await db.invoice.count({
+          where: { generationKey: { startsWith: structure.data.id } },
+        });
+        await jobs.monthlyBilling([org.id]);
+        assert.equal(
+          await db.invoice.count({ where: { generationKey: { startsWith: structure.data.id } } }),
+          count,
+          'monthly billing runs once per month',
+        );
+      } finally {
+        await jobs.onModuleDestroy();
+      }
+    });
+    await t.test('student edit and import report results row by row', async () => {
+      const roomy = await db.section.create({
+        data: { classId: classes[0].id, sessionId: sessions[0].id, name: 'Import', capacity: 5 },
+      });
+      const edit = await request(
+        'admin',
+        a.id,
+        `students/${students[0].id}`,
+        { fatherName: 'Abdul Karim', birthRegNo: '20121234567890123' },
+        'PATCH',
+      );
+      assert.equal(edit.status, 200, JSON.stringify(edit.data));
+      assert.equal(
+        (await request('admin', a.id, `students/${students[1].id}`, { fatherName: 'X Y' }, 'PATCH'))
+          .status,
+        404,
+      );
+      const imported = await request('admin', a.id, 'students/import', {
+        sectionId: roomy.id,
+        rows: [
+          { fullName: 'Imported One', studentCode: `${prefix}-imp1`, guardianPhone: '01812345678' },
+          { fullName: 'Imported Dup', studentCode: `${prefix}-imp1` },
+          { fullName: 'Bad Birth', studentCode: `${prefix}-imp3`, birthRegNo: '123' },
+          { fullName: 'Fixed Roll', studentCode: `${prefix}-imp4`, rollNumber: '1' },
+        ],
+      });
+      assert.equal(imported.status, 201, JSON.stringify(imported.data));
+      assert.deepEqual(
+        imported.data.results.map((r: any) => r.ok),
+        [true, false, false, false],
+        JSON.stringify(imported.data.results),
+      );
+      assert.match(imported.data.results[3].error, /Roll 1/);
+    });
+    await t.test('timetable belongs to a session and slots can be removed', async () => {
+      const subject = await db.subject.create({
+        data: { campusId: a.id, name: 'Routine subject', code: `${prefix}-rs` },
+      });
+      await db.sectionSubjectTeacher.create({
+        data: { sectionId: sections[0].id, subjectId: subject.id, teacherId: 'teacher' },
+      });
+      const slot = await request('admin', a.id, 'timetable', {
+        sectionId: sections[0].id,
+        subjectId: subject.id,
+        teacherId: 'teacher',
+        dayOfWeek: 0,
+        period: 1,
+        room: '101',
+      });
+      assert.equal(slot.status, 201, JSON.stringify(slot.data));
+      assert.equal(slot.data.sessionId, sessions[0].id);
+      assert.equal(
+        (await request('admin', b.id, `timetable/${slot.data.id}`, undefined, 'DELETE')).status,
+        404,
+      );
+      assert.equal(
+        (await request('admin', a.id, `timetable/${slot.data.id}`, undefined, 'DELETE')).status,
+        200,
+      );
+      await db.sectionSubjectTeacher.deleteMany({ where: { subjectId: subject.id } });
+    });
     await t.test(
       'activating a planned session closes prior history and blocks later writes',
       async () => {

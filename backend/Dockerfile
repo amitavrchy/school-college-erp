@@ -24,6 +24,8 @@ COPY package.json tsconfig.json tsconfig.tooling.json ./
 # prisma/ = schema + migrations + seeds; seeds and setup/bootstrap.ts import src/.
 COPY prisma ./prisma
 COPY setup ./setup
+# Noto Sans Bengali for receipts and report cards (SIL OFL, see assets/fonts/OFL.txt).
+COPY assets ./assets
 COPY src ./src
 USER node
 EXPOSE 4000

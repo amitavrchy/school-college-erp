@@ -1,4 +1,4 @@
-import { config } from '../config';
+import { Settings } from '../settings';
 import { signCapability } from '../auth/capability';
 import {
   BadRequestException,
@@ -28,6 +28,7 @@ export class AdmissionsController {
     @Inject(Scope) private scope: Scope,
     @Inject(Audit) private audit: Audit,
     @Inject(JwtService) private jwt: JwtService,
+    @Inject(Settings) private settings: Settings,
   ) {}
   @Public()
   @Get('options')
@@ -168,7 +169,9 @@ export class AdmissionsController {
         where: { id: app.id },
         data: {
           status: 'OFFERED',
-          offerExpiresAt: new Date(Date.now() + config.ADMISSION_OFFER_HOURS * 3600_000),
+          offerExpiresAt: new Date(
+            Date.now() + (await this.settings.policy(c.orgId, tx)).admissionOfferHours * 3600_000,
+          ),
         },
       });
       return tx.seatOffer.upsert({

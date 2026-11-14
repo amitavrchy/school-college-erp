@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
   Inject,
@@ -28,12 +29,33 @@ export class PaymentsController {
   ) {}
   @Get()
   @Roles(...FINANCE, 'GUARDIAN', 'STUDENT')
-  list(@Actor() c: Context) {
+  list(@Actor() c: Context, @Query('page') page?: string, @Query('limit') limit?: string) {
+    const take = Math.min(Math.max(Number(limit) || 200, 1), 500);
     return this.db.payment.findMany({
       where: { student: this.scope.studentFilter(c) },
       include: { student: true, allocations: { include: { invoice: true } } },
       orderBy: { createdAt: 'desc' },
+      skip: (Math.max(Number(page) || 1, 1) - 1) * take,
+      take,
     });
+  }
+  /** Correction step 1: record why a completed payment must be voided. */
+  @Post(':id/void-request')
+  @Roles(...FINANCE)
+  requestVoid(@Actor() c: Context, @Param('id') paymentId: string, @Body() body: unknown) {
+    const v = parse(z.object({ reason: z.string().trim().min(5).max(500) }), body);
+    return this.service.requestVoid(c, paymentId, v.reason);
+  }
+  @Delete(':id/void-request')
+  @Roles(...FINANCE)
+  cancelVoid(@Actor() c: Context, @Param('id') paymentId: string) {
+    return this.service.cancelVoid(c, paymentId);
+  }
+  /** Correction step 2: a different finance user approves and the allocations are reversed. */
+  @Post(':id/void')
+  @Roles(...FINANCE)
+  approveVoid(@Actor() c: Context, @Param('id') paymentId: string) {
+    return this.service.approveVoid(c, paymentId);
   }
   @Get('config')
   async settings() {
@@ -76,6 +98,7 @@ export class PaymentsController {
       v.amountMinor,
       v.provider,
       v.idempotencyKey,
+      c.userId,
     );
     if (payment.status === 'SUCCESS') return payment;
     if (v.provider === 'MANUAL') return this.service.settle(payment.id, `manual-${payment.id}`);

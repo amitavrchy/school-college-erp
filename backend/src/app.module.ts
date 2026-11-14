@@ -7,7 +7,8 @@ import { Audit } from './audit';
 import { Notifier } from './notify';
 import { OneTimeCodes } from './auth/otp';
 import { Jobs } from './jobs';
-import { Realtime } from './realtime';
+import { Realtime, RealtimeGateway } from './realtime';
+import { Settings, SettingsController } from './settings';
 import { AccessGuard } from './auth/access';
 import { Scope } from './auth/scope';
 import { AuthController } from './auth/auth.controller';
@@ -71,6 +72,7 @@ import { WebsiteController, PublicWebsitesController } from './websites/controll
     TransportController,
     HomeworkController,
     SupportController,
+    SettingsController,
   ],
   providers: [
     Db,
@@ -82,6 +84,8 @@ import { WebsiteController, PublicWebsitesController } from './websites/controll
     OneTimeCodes,
     Scope,
     Realtime,
+    RealtimeGateway,
+    Settings,
     Jobs,
     Billing,
     PaymentService,

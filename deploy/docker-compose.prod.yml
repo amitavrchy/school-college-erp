@@ -14,6 +14,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: "4000"
+      RUN_JOBS: "false"
     ports:
       - "127.0.0.1:4005:4000"
     networks: [apps-net]
@@ -32,6 +33,24 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  # Background jobs run here, not in the API (audit R-B1): the API enqueues only.
+  worker:
+    image: ghcr.io/amitavrchy/erp-backend:${IMAGE_TAG:-latest}
+    container_name: erp-worker
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      RUN_JOBS: "true"
+    command: ["node", "dist/worker.js"]
+    networks: [apps-net]
+    depends_on: [backend]
+    deploy:
+      resources:
+        limits:
+          memory: 320M
+    logging: *logging
 
   frontend:
     image: ghcr.io/amitavrchy/erp-frontend:${IMAGE_TAG:-latest}

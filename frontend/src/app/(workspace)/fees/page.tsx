@@ -92,7 +92,23 @@ export default function Fees() {
         label: 'Frequency',
         options: ['MONTHLY', 'QUARTERLY', 'ONCE'].map((v) => ({ value: v, label: v })),
       },
+      {
+        key: 'sibling',
+        label: 'Sibling discount applies to this head',
+        options: [
+          { value: 'no', label: 'No' },
+          { value: 'yes', label: 'Yes' },
+        ],
+      },
     ],
+    charge: [
+      { key: 'studentId', label: 'Student', remote: 'students' },
+      { key: 'feeHeadName', label: 'Charge', placeholder: 'Exam fee' },
+      { key: 'amount', label: 'Amount (BDT)', type: 'number', min: 1, step: '0.01' },
+      { key: 'dueDate', label: 'Due date', type: 'date' },
+      { key: 'note', label: 'Note (optional)', required: false },
+    ],
+    void: [{ key: 'reason', label: 'Why must this payment be voided?', type: 'textarea' }],
     waiver: [
       {
         key: 'invoiceId',
@@ -128,9 +144,27 @@ export default function Fees() {
         classId: v.classId,
         sessionId,
         name: v.name,
-        heads: [{ name: v.head, amountMinor: Math.round(v.amount * 100), frequency: v.frequency }],
+        heads: [
+          {
+            name: v.head,
+            amountMinor: Math.round(v.amount * 100),
+            frequency: v.frequency,
+            siblingDiscountEligible: v.sibling === 'yes',
+          },
+        ],
       });
       setToast('Fee structure created');
+    } else if (modal === 'charge') {
+      await post('fees/invoices', {
+        studentId: v.studentId,
+        dueDate: v.dueDate,
+        note: v.note,
+        lines: [{ feeHeadName: v.feeHeadName, amountMinor: Math.round(v.amount * 100) }],
+      });
+      setToast('Charge added to the student’s invoices');
+    } else if (modal.startsWith('void:')) {
+      await post(`payments/${modal.slice(5)}/void-request`, { reason: v.reason });
+      setToast('Void request sent. Another finance staff member must approve it.');
     } else if (modal === 'generate') {
       await post('fees/generate', v);
       setToast('Invoices generated. Existing invoices were kept.');
@@ -157,10 +191,16 @@ export default function Fees() {
         description="Thoughtful finances for a school that keeps moving forward."
       >
         {finance && (
-          <Button variant="secondary" onClick={() => setModal('generate')}>
-            <Plus size={16} />
-            Generate invoices
-          </Button>
+          <>
+            <Button variant="secondary" onClick={() => setModal('charge')}>
+              <Plus size={16} />
+              Add charge
+            </Button>
+            <Button variant="secondary" onClick={() => setModal('generate')}>
+              <Plus size={16} />
+              Generate invoices
+            </Button>
+          </>
         )}
         {(finance || config?.onlineReady) && (
           <Button onClick={() => setModal('payment')}>
@@ -300,19 +340,24 @@ export default function Fees() {
             <table>
               <thead>
                 <tr>
+                  <th>Receipt no.</th>
                   <th>Student</th>
                   <th>Date</th>
                   <th>Amount</th>
                   <th>Method</th>
                   <th>Status</th>
-                  <th>Receipt</th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
                 {payments?.map((p: any) => (
                   <tr key={p.id}>
+                    <td>{p.receiptNo || '—'}</td>
                     <td>
                       <strong>{p.student.fullName}</strong>
+                      {p.voidRequestedBy && p.status === 'SUCCESS' && (
+                        <div className="text-muted">Void requested: {p.voidReason}</div>
+                      )}
                     </td>
                     <td>{displayDate(p.paidAt || p.createdAt)}</td>
                     <td>{bdt(p.amountMinor)}</td>
@@ -320,13 +365,16 @@ export default function Fees() {
                     <td>
                       <Badge>{p.status}</Badge>
                     </td>
-                    <td>
-                      {p.status === 'SUCCESS' && (
+                    <td className="row-actions">
+                      {['SUCCESS', 'VOIDED'].includes(p.status) && (
                         <Button
                           variant="ghost"
                           onClick={async () => {
                             try {
-                              await pdfDownload(`payments/${p.id}/receipt`, `receipt-${p.id}.pdf`);
+                              await pdfDownload(
+                                `payments/${p.id}/receipt`,
+                                `receipt-${p.receiptNo || p.id}.pdf`,
+                              );
                             } catch (e) {
                               setToast((e as Error).message);
                             }
@@ -335,6 +383,48 @@ export default function Fees() {
                           <Download size={16} />
                           PDF
                         </Button>
+                      )}
+                      {finance && p.status === 'SUCCESS' && !p.voidRequestedBy && (
+                        <Button variant="ghost" onClick={() => setModal(`void:${p.id}`)}>
+                          Request void
+                        </Button>
+                      )}
+                      {finance && p.status === 'SUCCESS' && p.voidRequestedBy && (
+                        <>
+                          <Button
+                            variant="danger"
+                            onClick={async () => {
+                              if (
+                                !window.confirm(
+                                  'Approve this void? The amount returns to the student’s dues.',
+                                )
+                              )
+                                return;
+                              try {
+                                await post(`payments/${p.id}/void`, {});
+                                await Promise.all([reload(), reloadPayments()]);
+                                setToast('Payment voided');
+                              } catch (e) {
+                                setToast((e as Error).message);
+                              }
+                            }}
+                          >
+                            Approve void
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            onClick={async () => {
+                              try {
+                                await post(`payments/${p.id}/void-request`, undefined, 'DELETE');
+                                await reloadPayments();
+                              } catch (e) {
+                                setToast((e as Error).message);
+                              }
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </>
                       )}
                     </td>
                   </tr>
@@ -452,10 +542,11 @@ export default function Fees() {
                 generate: 'Generate class invoices',
                 structure: 'Create a fee structure',
                 waiver: 'Request a fee waiver',
+                charge: 'Add a one-off charge',
               } as any
-            )[modal]
+            )[modal] || 'Request a payment void'
           }
-          fields={fields[modal]}
+          fields={fields[modal.startsWith('void:') ? 'void' : modal]}
           onClose={() => setModal('')}
           onSubmit={submit}
         />
