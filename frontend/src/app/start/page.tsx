@@ -13,7 +13,37 @@ export default function Start() {
     [name, setName] = useState(''),
     [slug, setSlug] = useState(''),
     [busy, setBusy] = useState(false),
-    [failure, setFailure] = useState('');
+    [failure, setFailure] = useState(''),
+    [email, setEmail] = useState(''),
+    [phone, setPhone] = useState(''),
+    [verifyBy, setVerifyBy] = useState<'EMAIL' | 'PHONE'>('EMAIL'),
+    [codeSentTo, setCodeSentTo] = useState(''),
+    [sending, setSending] = useState(false),
+    [notice, setNotice] = useState('');
+  const contact = verifyBy === 'PHONE' ? phone.trim() : email.trim();
+  async function sendCode() {
+    setFailure('');
+    setNotice('');
+    if (!contact) {
+      setFailure(
+        verifyBy === 'PHONE' ? 'Enter your mobile number first.' : 'Enter your email first.',
+      );
+      return;
+    }
+    setSending(true);
+    try {
+      const result = await post('auth/codes', { purpose: 'SIGNUP', contact });
+      setCodeSentTo(contact);
+      setNotice(
+        `We sent a 6-digit code to ${contact}. It expires in 10 minutes.` +
+          (result.debugCode ? ` (Test code: ${result.debugCode})` : ''),
+      );
+    } catch (e) {
+      setFailure((e as Error).message);
+    } finally {
+      setSending(false);
+    }
+  }
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (['STARTER', 'GROWTH', 'SCALE'].includes(params.get('plan') || ''))
@@ -32,7 +62,10 @@ export default function Start() {
         slug,
         campusName: fd.get('campusName'),
         fullName: fd.get('fullName'),
-        email: fd.get('email'),
+        email: email.trim(),
+        ...(phone.trim() ? { phone: phone.trim() } : {}),
+        verifyBy,
+        code: fd.get('code'),
         password: fd.get('password'),
         planCode: plan,
         period,
@@ -172,9 +205,71 @@ export default function Start() {
               </label>
               <label>
                 Your email
-                <input name="email" type="email" autoComplete="email" required />
+                <input
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
               </label>
             </div>
+            <label>
+              Mobile number (optional)
+              <input
+                name="phone"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                placeholder="01XXXXXXXXX"
+                pattern="(\+?88)?01[3-9][0-9]{8}"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+              />
+            </label>
+            <fieldset className="verify-choice">
+              <legend>Verify your account</legend>
+              <label className="inline-choice">
+                <input
+                  type="radio"
+                  name="verifyBy"
+                  checked={verifyBy === 'EMAIL'}
+                  onChange={() => setVerifyBy('EMAIL')}
+                />
+                Send the code by email
+              </label>
+              <label className="inline-choice">
+                <input
+                  type="radio"
+                  name="verifyBy"
+                  checked={verifyBy === 'PHONE'}
+                  disabled={!phone.trim()}
+                  onChange={() => setVerifyBy('PHONE')}
+                />
+                Send the code by SMS
+              </label>
+              <div className="code-row">
+                <input
+                  name="code"
+                  aria-label="Verification code"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  pattern="[0-9]{6}"
+                  maxLength={6}
+                  placeholder="6-digit code"
+                  required
+                />
+                <Button type="button" variant="secondary" busy={sending} onClick={sendCode}>
+                  {codeSentTo && codeSentTo === contact ? 'Send again' : 'Send code'}
+                </Button>
+              </div>
+              {notice && (
+                <p className="text-muted" role="status">
+                  {notice}
+                </p>
+              )}
+            </fieldset>
             <label>
               Create a password
               <input

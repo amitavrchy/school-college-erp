@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
+  Upload,
   Users,
 } from 'lucide-react';
 import { useCampus } from '@/components/shell';
@@ -22,12 +23,14 @@ import {
 } from '@/components/ui';
 import { csvDownload, post } from '@/lib/api';
 import { useData } from '@/lib/use-data';
+import { StudentImport } from '@/components/student-import';
 export default function Students() {
   const { can, sessionId } = useCampus();
   const [search, setSearch] = useState(''),
     [section, setSection] = useState(''),
     [page, setPage] = useState(1),
     [add, setAdd] = useState(false),
+    [importing, setImporting] = useState(false),
     [toast, setToast] = useState('');
   const { data: sections } = useData(sessionId ? `sections?sessionId=${sessionId}` : null);
   const { data, error, loading, reload } = useData(
@@ -62,6 +65,38 @@ export default function Students() {
           <ArrowDownToLine size={16} />
           Export page
         </Button>
+        {manage && (
+          <Button
+            variant="secondary"
+            onClick={async () => {
+              if (
+                !window.confirm(
+                  'Create app accounts for guardians whose mobile number is on the student profile, and send each an SMS invitation?',
+                )
+              )
+                return;
+              try {
+                const r = await post(
+                  'students/invite-guardians',
+                  section ? { sectionId: section } : {},
+                );
+                setToast(
+                  `${r.linked} students linked to guardians · ${r.accountsCreated} new accounts · ${r.invited} SMS invitations`,
+                );
+              } catch (e) {
+                setToast((e as Error).message);
+              }
+            }}
+          >
+            Invite guardians
+          </Button>
+        )}
+        {manage && (
+          <Button variant="secondary" onClick={() => setImporting(true)}>
+            <Upload size={16} />
+            Import
+          </Button>
+        )}
         {manage && (
           <Button onClick={() => setAdd(true)}>
             <Plus size={17} />
@@ -200,6 +235,7 @@ export default function Students() {
                   label: `${s.schoolClass.name} · ${s.name}`,
                 })) || [],
             },
+            { key: 'rollNumber', label: 'Roll (leave blank for the next number)', required: false },
             { key: 'dob', label: 'Date of birth', type: 'date', required: false },
             {
               key: 'gender',
@@ -207,11 +243,29 @@ export default function Students() {
               required: false,
               options: ['Male', 'Female', 'Other'].map((v) => ({ value: v, label: v })),
             },
+            { key: 'fatherName', label: "Father's name", required: false },
+            { key: 'motherName', label: "Mother's name", required: false },
+            {
+              key: 'guardianPhone',
+              label: 'Guardian mobile',
+              required: false,
+              placeholder: '01XXXXXXXXX',
+            },
           ]}
           onSubmit={async (v) => {
             await post('students', v);
             await reload();
             setToast('Student added to your campus');
+          }}
+        />
+      )}
+      {importing && manage && (
+        <StudentImport
+          sections={sections || []}
+          onClose={() => setImporting(false)}
+          onDone={(n) => {
+            void reload();
+            setToast(`${n} students imported`);
           }}
         />
       )}

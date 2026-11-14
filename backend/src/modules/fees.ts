@@ -16,6 +16,7 @@ import { id, money, parse, date } from '../common';
 import { outstanding } from '../domain/fees';
 import { Audit } from '../audit';
 import { Billing } from './billing';
+import { Settings } from '../settings';
 @Controller('fees')
 export class FeesController {
   constructor(
@@ -23,7 +24,52 @@ export class FeesController {
     @Inject(Scope) private scope: Scope,
     @Inject(Audit) private audit: Audit,
     @Inject(Billing) private billing: Billing,
+    @Inject(Settings) private settings: Settings,
   ) {}
+  /** Ad-hoc invoice for one student (exam fee, uniform, a missed charge). */
+  @Post('invoices')
+  @Roles(...FINANCE)
+  async adhoc(@Actor() c: Context, @Body() body: unknown) {
+    const v = parse(
+      z.object({
+        studentId: id,
+        dueDate: date,
+        note: z.string().max(200).optional(),
+        lines: z
+          .array(z.object({ feeHeadName: z.string().trim().min(2).max(50), amountMinor: money }))
+          .min(1)
+          .max(20),
+      }),
+      body,
+    );
+    await this.scope.student(c, v.studentId);
+    const enrollment = await this.db.enrollment.findFirst({
+      where: { studentId: v.studentId, status: 'ACTIVE', session: { status: 'ACTIVE' } },
+      include: { session: true },
+    });
+    if (!enrollment) throw new BadRequestException('The student has no active enrolment');
+    return this.db.$transaction(async (tx) => {
+      const invoice = await tx.invoice.create({
+        data: {
+          studentId: v.studentId,
+          sessionId: enrollment.sessionId,
+          dueDate: v.dueDate,
+          totalMinor: v.lines.reduce((s, l) => s + l.amountMinor, 0),
+          lines: { create: v.lines },
+        },
+        include: { lines: true },
+      });
+      await this.audit.log(
+        c,
+        'CREATE',
+        'Invoice',
+        invoice.id,
+        { adhoc: true, note: v.note ?? null },
+        tx,
+      );
+      return invoice;
+    });
+  }
   @Get('invoices')
   @Roles(...FINANCE, 'GUARDIAN', 'STUDENT')
   invoices(@Actor() c: Context) {
@@ -55,6 +101,7 @@ export class FeesController {
               name: z.string().min(2).max(50),
               amountMinor: money,
               frequency: z.enum(['MONTHLY', 'QUARTERLY', 'ONCE']),
+              siblingDiscountEligible: z.boolean().default(false),
             }),
           )
           .min(1)
@@ -110,8 +157,12 @@ export class FeesController {
     const head = invoice.lines.find((l) => l.feeHeadName === v.feeHeadName);
     if (!head || v.amountMinor > head.amountMinor || v.amountMinor > outstanding(invoice))
       throw new BadRequestException('Waiver exceeds the selected fee head or outstanding balance');
-    return this.db.waiver.create({
-      data: { ...v, studentId: invoice.studentId, requestedBy: c.userId },
+    return this.db.$transaction(async (tx) => {
+      const waiver = await tx.waiver.create({
+        data: { ...v, studentId: invoice.studentId, requestedBy: c.userId },
+      });
+      await this.audit.log(c, 'REQUEST', 'Waiver', waiver.id, { amountMinor: v.amountMinor }, tx);
+      return waiver;
     });
   }
   @Post('waivers/:id/approve')
@@ -124,8 +175,11 @@ export class FeesController {
       });
       if (waiver.requestedBy === c.userId)
         throw new ForbiddenException('A different staff member must approve this waiver');
-      if (waiver.amountMinor > 100000 && !hasRole(c, ['PRINCIPAL']))
-        throw new ForbiddenException('Waivers above ৳1,000 require Principal approval');
+      const threshold = (await this.settings.policy(c.orgId, tx)).waiverPrincipalThresholdMinor;
+      if (waiver.amountMinor > threshold && !hasRole(c, ['PRINCIPAL']))
+        throw new ForbiddenException(
+          `Waivers above ৳${(threshold / 100).toLocaleString('en-BD')} require Principal approval`,
+        );
       if (waiver.invoice.session.status === 'CLOSED')
         throw new ForbiddenException('Closed sessions are read-only');
       const used = await tx.waiver.aggregate({
@@ -154,15 +208,14 @@ export class FeesController {
         where: { id: waiverId },
         data: { status: 'APPROVED', approvedBy: c.userId },
       });
-      await tx.auditLog.create({
-        data: {
-          actorId: c.userId,
-          campusId: c.campusId,
-          action: 'APPROVE',
-          entity: 'Waiver',
-          entityId: waiverId,
-        },
-      });
+      await this.audit.log(
+        c,
+        'APPROVE',
+        'Waiver',
+        waiverId,
+        { amountMinor: waiver.amountMinor },
+        tx,
+      );
       return result;
     });
   }

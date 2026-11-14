@@ -46,7 +46,13 @@ test(
     }
     async function register(label: string, planCode = 'STARTER') {
       const slug = `test-${label}-${randomUUID().slice(0, 8)}`;
+      const code = await request('', '', 'auth/codes', {
+        purpose: 'SIGNUP',
+        contact: `${slug}@example.test`,
+      });
+      assert.equal(code.status, 201, 'API must run with OTP_DEBUG=true for integration tests');
       const r = await request('', '', 'saas/register', {
+        code: code.data.debugCode,
         organizationName: `Test ${label} institution`,
         slug,
         campusName: 'Main Campus',
@@ -406,6 +412,336 @@ test(
         201,
       );
     });
+    await t.test('sign-up needs a verified contact and a contact gets one free trial', async () => {
+      const slug = `test-dup-${randomUUID().slice(0, 8)}`;
+      const form = {
+        organizationName: 'Duplicate trial institution',
+        slug,
+        campusName: 'Main Campus',
+        planCode: 'STARTER',
+        fullName: 'Repeat Owner',
+        password,
+      };
+      const unverified = await request('', '', 'saas/register', {
+        ...form,
+        email: `${slug}@example.test`,
+      });
+      assert.equal(unverified.status, 400, 'a code is required');
+      const code = await request('', '', 'auth/codes', {
+        purpose: 'SIGNUP',
+        contact: a.user.email,
+      });
+      const again = await request('', '', 'saas/register', {
+        ...form,
+        email: a.user.email,
+        code: code.data.debugCode,
+      });
+      assert.equal(again.status, 409, 'the same verified email cannot start a second trial');
+    });
+    await t.test('staff lifecycle, password reset and two-step sign-in', async () => {
+      const { totp } = await import('../src/auth/totp');
+      const c = await register('c');
+      const staffEmail = `staff-${randomUUID().slice(0, 8)}@example.test`;
+      const staff = await request(c.cookie, c.campus.id, 'users', {
+        fullName: 'Lifecycle Teacher',
+        email: staffEmail,
+        password,
+        role: 'TEACHER',
+      });
+      assert.equal(staff.status, 201, JSON.stringify(staff.data));
+      const staffLogin = await request('', '', 'auth/login', { email: staffEmail, password });
+      assert.equal((await request(staffLogin.cookie, c.campus.id, 'classes')).status, 200);
+      // Another institution's administrator cannot see or change this person.
+      assert.equal(
+        (await request(a.cookie, a.campus.id, `users/${staff.data.id}`, { active: false }, 'PATCH'))
+          .status,
+        404,
+      );
+      assert.equal(
+        (await request(a.cookie, a.campus.id, `users/${staff.data.id}/reset-password`, {})).status,
+        404,
+      );
+      // Only a super administrator may grant super administrator.
+      const limited = await request(c.cookie, c.campus.id, 'users', {
+        fullName: 'Campus Admin',
+        email: `ca-${randomUUID().slice(0, 8)}@example.test`,
+        password,
+        role: 'CAMPUS_ADMIN',
+      });
+      const caLogin = await request('', '', 'auth/login', { email: limited.data.email, password });
+      assert.equal(
+        (
+          await request(
+            caLogin.cookie,
+            c.campus.id,
+            `users/${staff.data.id}`,
+            {
+              roles: ['SUPER_ADMIN'],
+            },
+            'PATCH',
+          )
+        ).status,
+        403,
+      );
+      // Deactivation ends access at once.
+      assert.equal(
+        (await request(c.cookie, c.campus.id, `users/${staff.data.id}`, { active: false }, 'PATCH'))
+          .status,
+        200,
+      );
+      assert.equal((await request(staffLogin.cookie, c.campus.id, 'classes')).status, 401);
+      const relogin = await request('', '', 'auth/login', { email: staffEmail, password });
+      assert.equal((await request(relogin.cookie, c.campus.id, 'classes')).status, 403);
+      assert.equal(
+        (await request(c.cookie, c.campus.id, `users/${staff.data.id}`, { active: true }, 'PATCH'))
+          .status,
+        200,
+      );
+      const temp = await request(
+        c.cookie,
+        c.campus.id,
+        `users/${staff.data.id}/reset-password`,
+        {},
+      );
+      assert.equal(temp.status, 201);
+      assert.equal(
+        (
+          await request('', '', 'auth/login', {
+            email: staffEmail,
+            password: temp.data.temporaryPassword,
+          })
+        ).status,
+        201,
+      );
+      // Existing accounts are attached after confirmation, never duplicated or taken over.
+      const existing = await request(c.cookie, c.campus.id, 'users', {
+        fullName: 'Owner A',
+        email: a.user.email,
+        role: 'TEACHER',
+      });
+      assert.equal(existing.status, 409);
+      assert.equal(existing.data.message.includes('already exists'), true);
+      const attached = await request(c.cookie, c.campus.id, 'users', {
+        fullName: 'Owner A',
+        email: a.user.email,
+        role: 'TEACHER',
+        attachExisting: true,
+      });
+      assert.equal(attached.status, 201);
+      assert.equal(attached.data.attached, true);
+      assert.equal(
+        (await request(c.cookie, c.campus.id, `users/${a.user.id}/reset-password`, {})).status,
+        403,
+        'a person who belongs to another institution resets their own password',
+      );
+      // Password reset by code: same response for unknown accounts, revokes sessions.
+      const unknown = await request('', '', 'auth/codes', {
+        purpose: 'PASSWORD_RESET',
+        contact: `nobody-${randomUUID().slice(0, 8)}@example.test`,
+      });
+      assert.equal(unknown.status, 201);
+      assert.equal(unknown.data.ok, true);
+      const resetCode = await request('', '', 'auth/codes', {
+        purpose: 'PASSWORD_RESET',
+        contact: staffEmail,
+      });
+      const before = await request('', '', 'auth/login', {
+        email: staffEmail,
+        password: temp.data.temporaryPassword,
+      });
+      assert.equal(
+        (
+          await request('', '', 'auth/password-reset', {
+            contact: staffEmail,
+            code: '000000' === resetCode.data.debugCode ? '111111' : '000000',
+            password: 'AnotherFixture!2026',
+          })
+        ).status,
+        400,
+      );
+      assert.equal(
+        (
+          await request('', '', 'auth/password-reset', {
+            contact: staffEmail,
+            code: resetCode.data.debugCode,
+            password: 'AnotherFixture!2026',
+          })
+        ).status,
+        201,
+      );
+      assert.equal((await request(before.cookie, c.campus.id, 'auth/me')).status, 401);
+      assert.equal(
+        (
+          await request('', '', 'auth/login', {
+            email: staffEmail,
+            password: 'AnotherFixture!2026',
+          })
+        ).status,
+        201,
+      );
+      // An owner whose institution never paid needs platform approval for another one.
+      const second = await request(c.cookie, c.campus.id, 'saas/organizations', {
+        organizationName: 'Second campus group',
+        slug: `test-second-${randomUUID().slice(0, 8)}`,
+        campusName: 'Second Campus',
+        planCode: 'STARTER',
+      });
+      assert.equal(second.status, 201, JSON.stringify(second.data));
+      created.push(second.data.organization.id);
+      assert.equal(second.data.approvalRequired, true);
+      // Two-step sign-in for a super administrator.
+      const me = await request(c.cookie, c.campus.id, 'auth/me');
+      assert.equal(me.data.mfaSetupRequired, true);
+      const setup = await request(c.cookie, c.campus.id, 'auth/mfa/setup', {});
+      const now = () => totp(setup.data.secret, Math.floor(Date.now() / 30_000));
+      assert.equal(
+        (
+          await request(c.cookie, c.campus.id, 'auth/mfa/enable', {
+            code: '000000' === now() ? '111111' : '000000',
+          })
+        ).status,
+        400,
+      );
+      const enabled = await request(c.cookie, c.campus.id, 'auth/mfa/enable', { code: now() });
+      assert.equal(enabled.status, 201);
+      assert.equal(enabled.data.recoveryCodes.length, 10);
+      const first = await request('', '', 'auth/login', { email: c.user.email, password });
+      assert.equal(first.data.mfaRequired, true);
+      assert.equal(first.cookie, '', 'no session before the second step');
+      const second2 = await request('', '', 'auth/mfa/login', {
+        challenge: first.data.challenge,
+        code: now(),
+      });
+      assert.equal(second2.status, 201);
+      assert.equal((await request(second2.cookie, c.campus.id, 'classes')).status, 200);
+      const recovery = enabled.data.recoveryCodes[0];
+      const viaRecovery = await request('', '', 'auth/mfa/login', {
+        challenge: (await request('', '', 'auth/login', { email: c.user.email, password })).data
+          .challenge,
+        code: recovery,
+      });
+      assert.equal(viaRecovery.status, 201);
+      const reused = await request('', '', 'auth/mfa/login', {
+        challenge: (await request('', '', 'auth/login', { email: c.user.email, password })).data
+          .challenge,
+        code: recovery,
+      });
+      assert.equal(reused.status, 401, 'recovery codes work once');
+    });
+    await t.test(
+      'school app tokens: locked to one school, rotating refresh, phone sign-in',
+      async () => {
+        const call = async (
+          token: string,
+          campus: string,
+          path: string,
+          body?: unknown,
+          method?: string,
+        ) => {
+          const r = await fetch(`${base}/${path}`, {
+            method: method ?? (body === undefined ? 'GET' : 'POST'),
+            headers: {
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              ...(campus ? { 'x-campus-id': campus } : {}),
+              'Content-Type': 'application/json',
+            },
+            ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+          });
+          return { status: r.status, data: await r.json().catch(() => null) };
+        };
+        const config = await call('', '', `app/config?school=${a.organization.slug}`);
+        assert.equal(config.status, 200);
+        assert.equal(config.data.school.name, a.organization.name);
+        const signIn = await call('', '', 'auth/token', {
+          school: a.organization.slug,
+          email: a.user.email,
+          password,
+          deviceName: 'Test phone',
+        });
+        assert.equal(signIn.status, 201, JSON.stringify(signIn.data));
+        assert.ok(signIn.data.accessToken && signIn.data.refreshToken);
+        assert.equal((await call(signIn.data.accessToken, a.campus.id, 'classes')).status, 200);
+        assert.equal(
+          (
+            await call('', '', 'auth/token', {
+              school: b.organization.slug,
+              email: a.user.email,
+              password,
+            })
+          ).status,
+          403,
+          'an account cannot sign in to another school app',
+        );
+        // Rotation: the new refresh token works once; replaying the old one ends the chain.
+        const first = await call('', '', 'auth/refresh', {
+          refreshToken: signIn.data.refreshToken,
+        });
+        assert.equal(first.status, 201);
+        assert.notEqual(first.data.refreshToken, signIn.data.refreshToken);
+        assert.equal(
+          (await call('', '', 'auth/refresh', { refreshToken: signIn.data.refreshToken })).status,
+          401,
+        );
+        assert.equal(
+          (await call('', '', 'auth/refresh', { refreshToken: first.data.refreshToken })).status,
+          401,
+          'reuse of an old token revokes the newer one too',
+        );
+        // Phone-only guardian signs in with a one-time code.
+        const guardianPhone = `017${String(Date.now()).slice(-8)}`;
+        const guardian = await request(a.cookie, a.campus.id, 'users', {
+          fullName: 'Phone Guardian',
+          phone: guardianPhone,
+          role: 'GUARDIAN',
+        });
+        assert.equal(guardian.status, 201, JSON.stringify(guardian.data));
+        const unknown = await call('', '', 'auth/codes', {
+          purpose: 'GUARDIAN_LOGIN',
+          contact: '01999999999',
+          school: a.organization.slug,
+        });
+        assert.equal(unknown.status, 201);
+        assert.equal(unknown.data.debugCode, undefined, 'no code is created for an unknown number');
+        const code = await call('', '', 'auth/codes', {
+          purpose: 'GUARDIAN_LOGIN',
+          contact: guardianPhone,
+          school: a.organization.slug,
+        });
+        assert.ok(code.data.debugCode);
+        assert.equal(
+          (
+            await call('', '', 'auth/token/otp', {
+              school: b.organization.slug,
+              contact: guardianPhone,
+              code: code.data.debugCode,
+            })
+          ).status,
+          400,
+          'the code only works for the school that sent it',
+        );
+        const phoneSignIn = await call('', '', 'auth/token/otp', {
+          school: a.organization.slug,
+          contact: guardianPhone,
+          code: code.data.debugCode,
+        });
+        assert.equal(phoneSignIn.status, 201, JSON.stringify(phoneSignIn.data));
+        const device = await call(phoneSignIn.data.accessToken, a.campus.id, 'devices', {
+          platform: 'android',
+          pushToken: `test-push-token-${randomUUID()}`,
+          locale: 'bn',
+        });
+        assert.equal(device.status, 201, JSON.stringify(device.data));
+        assert.equal(
+          (await call(phoneSignIn.data.accessToken, b.campus.id, 'auth/me')).status,
+          403,
+          'a school app token cannot reach another school',
+        );
+        await db.device.deleteMany({ where: { userId: guardian.data.id } });
+        await db.refreshToken.deleteMany({
+          where: { userId: { in: [guardian.data.id, a.user.id] } },
+        });
+      },
+    );
     await t.test('expired subscriptions preserve reads and block operational writes', async () => {
       await db.subscription.update({
         where: { organizationId: a.organization.id },

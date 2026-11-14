@@ -1,3 +1,4 @@
+import { readClaims, signClaims } from '../auth/capability';
 import { ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { Websites } from './service';
 import { grade, gpa, NCTB } from '../domain/grading';
@@ -72,9 +73,10 @@ export class WebsiteResults {
     )
       throw missing();
     const result = await this.record(slug, v.termId, row.id);
-    const token = await this.sites.jwt.signAsync(
+    const token = await signClaims(
+      this.sites.jwt,
       { purpose: 'website-result', slug, termId: v.termId, enrollmentId: row.id },
-      { expiresIn: '5m' },
+      '5m',
     );
     return {
       ...result,
@@ -83,12 +85,8 @@ export class WebsiteResults {
     };
   }
   async fromToken(slug: string, token: string) {
-    let c;
-    try {
-      c = await this.sites.jwt.verifyAsync(token);
-    } catch {
-      throw new ForbiddenException('Result download expired. Look up the result again.');
-    }
+    const c = await readClaims(this.sites.jwt, token);
+    if (!c) throw new ForbiddenException('Result download expired. Look up the result again.');
     if (
       c.purpose !== 'website-result' ||
       c.slug !== slug ||

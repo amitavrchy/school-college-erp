@@ -43,7 +43,13 @@ test(
     }
     async function institution(label: string) {
       const slug = 'test-cms-' + label + '-' + randomUUID().slice(0, 8);
+      const code = await request('auth/codes', {
+        purpose: 'SIGNUP',
+        contact: slug + '@example.test',
+      });
+      assert.equal(code.status, 201, 'API must run with OTP_DEBUG=true for integration tests');
       const r = await request('saas/register', {
+        code: code.data.debugCode,
         organizationName: 'CMS ' + label + ' Academy',
         slug,
         campusName: 'Main campus',
@@ -366,16 +372,19 @@ test(
         const duplicate = await db.student.create({
           data: { campusId: a.campus.id, studentCode: 'CMS-002', fullName: 'Duplicate Roll' },
         });
-        const dupe = await db.enrollment.create({
-          data: {
-            studentId: duplicate.id,
-            sectionId: section.id,
-            sessionId: a.session.id,
-            rollNumber: '17',
-          },
-        });
-        assert.equal((await request('public-websites/' + a.slug + '/results', input)).status, 404);
-        await db.enrollment.delete({ where: { id: dupe.id } });
+        // Roll numbers are unique per section, so a public lookup can never match two students.
+        await assert.rejects(
+          db.enrollment.create({
+            data: {
+              studentId: duplicate.id,
+              sectionId: section.id,
+              sessionId: a.session.id,
+              rollNumber: '17',
+            },
+          }),
+          (e: { code?: string }) => e.code === 'P2002',
+        );
+        assert.equal((await request('public-websites/' + a.slug + '/results', input)).status, 201);
         await db.student.delete({ where: { id: duplicate.id } });
       },
     );

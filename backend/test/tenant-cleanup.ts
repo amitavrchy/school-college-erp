@@ -31,6 +31,10 @@ export async function removeTestTenant(db: PrismaClient, organizationId: string)
       await tx.libraryLoan.deleteMany({ where: { book: { campusId: { in: ids } } } });
       await tx.libraryReservation.deleteMany({ where: { book: { campusId: { in: ids } } } });
       await tx.libraryBook.deleteMany({ where: { campusId: { in: ids } } });
+      await tx.feeHeadCharge.deleteMany({
+        where: { feeHead: { structure: { session: { campusId: { in: ids } } } } },
+      });
+      await tx.receiptCounter.deleteMany({ where: { campusId: { in: ids } } });
       await tx.paymentAllocation.deleteMany({
         where: { payment: { student: { campusId: { in: ids } } } },
       });
@@ -81,7 +85,18 @@ export async function removeTestTenant(db: PrismaClient, organizationId: string)
       await tx.subscriptionEvent.deleteMany({ where: { organizationId } });
       await tx.subscription.deleteMany({ where: { organizationId } });
       await tx.organizationMember.deleteMany({ where: { organizationId } });
+      await tx.trialClaim.deleteMany({ where: { organizationId } });
+      await tx.device.deleteMany({ where: { organizationId } });
+      await tx.refreshToken.deleteMany({ where: { organizationId } });
+      await tx.organizationSettings.deleteMany({ where: { organizationId } });
       await tx.organization.delete({ where: { id: organizationId } });
+      const users = await tx.user.findMany({
+        where: { id: { in: members.map((m) => m.userId) }, memberships: { none: {} } },
+        select: { email: true, phone: true },
+      });
+      await tx.oneTimeCode.deleteMany({
+        where: { contact: { in: users.flatMap((u) => [u.email ?? '', u.phone ?? '']) } },
+      });
       await tx.user.deleteMany({
         where: {
           id: { in: members.map((m) => m.userId) },

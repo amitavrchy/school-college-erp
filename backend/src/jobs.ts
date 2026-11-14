@@ -1,4 +1,5 @@
-import { Inject, Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable, OnModuleInit, OnModuleDestroy, Optional } from '@nestjs/common';
+import { Push, type PushEvent } from './push';
 import { Queue, Worker } from 'bullmq';
 import IORedis from 'ioredis';
 import { Db } from './db';
@@ -6,9 +7,11 @@ import { config } from './config';
 import { today } from './common';
 import { createHash } from 'node:crypto';
 import { HttpException, ServiceUnavailableException } from '@nestjs/common';
-import { lateFine } from './domain/fees';
 import { Realtime } from './realtime';
 import { Billing } from './modules/billing';
+import { Notifier } from './notify';
+import { Settings } from './settings';
+import { subscriptionUsable } from './saas/policy';
 @Injectable()
 export class Jobs implements OnModuleInit, OnModuleDestroy {
   private connection = new IORedis(config.REDIS_URL, { maxRetriesPerRequest: null });
@@ -58,25 +61,68 @@ export class Jobs implements OnModuleInit, OnModuleDestroy {
     @Inject(Db) private db: Db,
     @Inject(Realtime) private realtime: Realtime,
     @Inject(Billing) private billing: Billing,
+    @Inject(Notifier) private notifier: Notifier,
+    @Inject(Settings) private settings: Settings,
+    @Optional() @Inject(Push) private push?: Push,
   ) {}
+  /**
+   * Queues a push to these users' phones. `key` de-duplicates (one push per event and record);
+   * pushes are best effort and never block the action that caused them.
+   */
+  async enqueuePush(
+    userIds: string[],
+    event: PushEvent,
+    key: string,
+    data: Record<string, string> = {},
+  ) {
+    const ids = [...new Set(userIds)];
+    if (!ids.length) return;
+    await this.queue
+      .add('push', { userIds: ids, event, data }, { jobId: `push-${event}-${key}`, attempts: 3 })
+      .catch((error) => console.error('Push could not be queued', (error as Error).message));
+  }
   async onModuleInit() {
+    // The API process enqueues; processing happens where RUN_JOBS is true (the worker container).
+    if (!config.RUN_JOBS) return;
     this.worker = new Worker(
       'campus-work',
       async (job) => {
-        if (job.name === 'sms') return this.sendSms(job.data.id);
-        if (job.name === 'absence') return this.absence(job.data.enrollmentId, job.data.date);
-        if (job.name === 'maintenance') return this.maintenance();
+        switch (job.name) {
+          case 'sms':
+            return this.sendSms(job.data.id);
+          case 'push':
+            return this.push?.send(job.data.userIds, job.data.event, job.data.data);
+          case 'absence':
+            return this.absence(job.data.enrollmentId, job.data.date);
+          case 'notices':
+            return this.notices();
+          case 'fines':
+            return this.fines();
+          case 'monthly-billing':
+            return this.monthlyBilling();
+          case 'fee-reminders':
+            return this.feeReminders();
+          case 'offer-expiry':
+            return this.offerExpiry();
+        }
       },
       { connection: this.connection as any, concurrency: 4 },
     );
     this.worker.on('failed', (job, error) =>
-      console.error('Background job failed', job?.id, error.message),
+      console.error('Background job failed', job?.name, job?.id, error.message),
     );
-    await this.queue.upsertJobScheduler(
-      'maintenance',
-      { every: 60_000 },
-      { name: 'maintenance', data: {} },
-    );
+    // Replaces the old every-minute "maintenance" job that scanned every table.
+    await this.queue.removeJobScheduler('maintenance').catch(() => undefined);
+    const tz = 'Asia/Dhaka';
+    const schedules: [string, { every?: number; pattern?: string; tz?: string }][] = [
+      ['notices', { every: 60_000 }],
+      ['offer-expiry', { every: 10 * 60_000 }],
+      ['fines', { pattern: '0 1 * * *', tz }],
+      ['monthly-billing', { pattern: '30 0 * * *', tz }],
+      ['fee-reminders', { pattern: '0 9 * * *', tz }],
+    ];
+    for (const [name, repeat] of schedules)
+      await this.queue.upsertJobScheduler(name, repeat, { name, data: {} });
   }
   async onModuleDestroy() {
     await this.worker?.close();
@@ -103,35 +149,13 @@ export class Jobs implements OnModuleInit, OnModuleDestroy {
     const message = await this.db.smsMessage.findUniqueOrThrow({ where: { id } });
     if (['SENT', 'SIMULATED', 'DELIVERED'].includes(message.status)) return;
     try {
-      if (config.SMS_PROVIDER === 'console') {
-        await this.db.smsMessage.update({
-          where: { id },
-          data: { status: 'SIMULATED', providerRef: `console-${id}` },
-        });
-        return;
-      }
-      if (!process.env.SMS_API_URL || !process.env.SMS_API_KEY)
-        throw new Error('SMS gateway is not configured');
-      const response = await fetch(process.env.SMS_API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${process.env.SMS_API_KEY}`,
-          'Idempotency-Key': message.dedupeKey,
-        },
-        body: JSON.stringify({
-          to: message.toPhone,
-          body: message.body,
-          sender: process.env.SMS_SENDER_ID,
-        }),
-        signal: AbortSignal.timeout(15000),
-      });
-      if (!response.ok) throw new Error(`SMS provider returned ${response.status}`);
-      const result = (await response.json()) as { id: string };
-      if (!result.id) throw new Error('SMS response missing message ID');
+      const result = await this.notifier.sms(message.toPhone, message.body, message.dedupeKey);
       await this.db.smsMessage.update({
         where: { id },
-        data: { status: 'SENT', providerRef: result.id },
+        data:
+          result.provider === 'console'
+            ? { status: 'SIMULATED', providerRef: `console-${id}` }
+            : { status: 'SENT', providerRef: result.id },
       });
     } catch (error) {
       await this.db.smsMessage.update({ where: { id }, data: { status: 'FAILED' } });
@@ -165,6 +189,12 @@ export class Jobs implements OnModuleInit, OnModuleDestroy {
       })
     )
       return;
+    await this.enqueuePush(
+      s.guardians.map((g) => g.guardianUserId),
+      'attendance',
+      `${s.id}-${day}`,
+      { studentId: s.id, date: day },
+    );
     for (const g of s.guardians)
       if (g.guardian.phone) {
         await this.sms(
@@ -176,12 +206,24 @@ export class Jobs implements OnModuleInit, OnModuleDestroy {
         this.realtime.user(g.guardianUserId, 'attendance');
       }
   }
-  async maintenance() {
+  /** Organisations whose scheduled work should run: active and with a usable subscription. */
+  private async liveOrganizations(only?: string[]) {
+    const orgs = await this.db.organization.findMany({
+      where: { status: 'ACTIVE', ...(only ? { id: { in: only } } : {}) },
+      select: { id: true, subscription: { select: { status: true, currentPeriodEnd: true } } },
+    });
+    return orgs.filter((o) => subscriptionUsable(o.subscription)).map((o) => o.id);
+  }
+  async notices() {
     const now = new Date();
+    const live = new Set(await this.liveOrganizations());
     const notices = await this.db.notice.findMany({
       where: { status: 'SCHEDULED', OR: [{ scheduledAt: null }, { scheduledAt: { lte: now } }] },
+      include: { campus: { select: { orgId: true } } },
+      take: 50,
     });
     for (const n of notices) {
+      if (!live.has(n.campus.orgId)) continue;
       const audience = n.audience as { sectionIds?: string[]; studentIds?: string[] };
       const students = await this.db.student.findMany({
         where: {
@@ -207,66 +249,126 @@ export class Jobs implements OnModuleInit, OnModuleDestroy {
             );
           this.realtime.user(g.guardianUserId, 'notice');
         }
+      await this.enqueuePush(
+        students.flatMap((s) => s.guardians.map((g) => g.guardianUserId)),
+        'notice',
+        n.id,
+        { noticeId: n.id },
+      );
       await this.db.notice.update({ where: { id: n.id }, data: { status: 'SENT' } });
       this.realtime.campus(n.campusId, 'notice');
     }
-    const invoices = await this.db.invoice.findMany({
-      where: { status: { in: ['DUE', 'PARTIAL'] }, session: { status: { not: 'CLOSED' } } },
-    });
-    for (const invoice of invoices) {
-      const fineMinor = lateFine(
-        invoice.dueDate,
-        now,
-        Number(process.env.FEE_FINE_PER_DAY_MINOR || 1000),
-        50000,
-      );
-      if (fineMinor > invoice.fineMinor)
-        await this.db.invoice.updateMany({
-          where: {
-            id: invoice.id,
-            status: { in: ['DUE', 'PARTIAL'] },
-            session: { status: { not: 'CLOSED' } },
-            fineMinor: { lt: fineMinor },
-          },
-          data: { fineMinor },
-        });
-    }
+  }
+  /**
+   * Daily late fines: one set-based UPDATE per organisation using that school's policy. Fines
+   * only ever grow, so re-running the job on the same day changes nothing.
+   */
+  async fines(only?: string[]) {
     const day = today();
-    if (day.endsWith('-01')) {
-      const structures = await this.db.feeStructure.findMany({
-        where: { session: { status: 'ACTIVE' } },
-        include: { session: true },
-      });
-      for (const structure of structures)
-        await this.billing.generate(
-          structure.session.campusId,
-          structure.id,
-          new Date(`${day.slice(0, 7)}-10`),
-        );
+    for (const orgId of await this.liveOrganizations(only)) {
+      const p = await this.settings.policy(orgId);
+      if (p.lateFineMode === 'NONE') continue;
+      const perDay = p.lateFineMode === 'PER_DAY' ? p.lateFinePerDayMinor : 0;
+      const flat = p.lateFineMode === 'FLAT' ? p.lateFineFlatMinor : 0;
+      await this.db.$executeRaw`
+        UPDATE "Invoice" i
+        SET "fineMinor" = LEAST(${p.lateFineCapMinor}::int,
+          CASE WHEN ${flat}::int > 0 THEN ${flat}::int
+               ELSE (${day}::date - i."dueDate") * ${perDay}::int END)
+        FROM "Student" s, "Campus" c, "AcademicSession" a
+        WHERE s."id" = i."studentId" AND c."id" = s."campusId" AND c."orgId" = ${orgId}
+          AND a."id" = i."sessionId" AND a."status" <> 'CLOSED'
+          AND i."status" IN ('DUE', 'PARTIAL')
+          AND i."dueDate" < ${day}::date
+          AND i."fineMinor" < LEAST(${p.lateFineCapMinor}::int,
+            CASE WHEN ${flat}::int > 0 THEN ${flat}::int
+                 ELSE (${day}::date - i."dueDate") * ${perDay}::int END)`;
     }
-    if (process.env.FEE_REMINDERS_ENABLED === 'true') {
-      const dueDays = [day, new Date(Date.parse(day) + 3 * 86400000).toISOString().slice(0, 10)];
-      for (const invoice of invoices.filter((i) =>
-        dueDays.includes(i.dueDate.toISOString().slice(0, 10)),
-      )) {
-        const s = await this.db.student.findUniqueOrThrow({
-          where: { id: invoice.studentId },
-          include: { guardians: { where: { isPrimary: true }, include: { guardian: true } } },
+  }
+  /**
+   * Bills each active fee structure once per month (any day of the month, so a missed run
+   * catches up). The marker is written after generation; generation itself is idempotent.
+   */
+  async monthlyBilling(only?: string[]) {
+    const day = today();
+    const month = day.slice(0, 7);
+    const live = await this.liveOrganizations(only);
+    const structures = await this.db.feeStructure.findMany({
+      where: {
+        session: { status: 'ACTIVE', campus: { orgId: { in: live } } },
+        OR: [{ lastGeneratedMonth: null }, { lastGeneratedMonth: { lt: month } }],
+      },
+      include: { session: { include: { campus: true } } },
+    });
+    for (const structure of structures) {
+      const policy = await this.settings.policy(structure.session.campus.orgId);
+      const dueDate = new Date(`${month}-${String(policy.invoiceDueDay).padStart(2, '0')}`);
+      try {
+        if (dueDate >= structure.session.startsOn && dueDate <= structure.session.endsOn)
+          await this.billing.generate(structure.session.campusId, structure.id, dueDate);
+        await this.db.feeStructure.update({
+          where: { id: structure.id },
+          data: { lastGeneratedMonth: month },
         });
-        for (const g of s.guardians)
-          if (g.guardian.phone)
-            await this.sms(
-              s.campusId,
-              g.guardian.phone,
-              `Fee reminder for ${s.fullName}: BDT ${((invoice.totalMinor + invoice.fineMinor - invoice.waivedMinor - invoice.paidMinor) / 100).toFixed(2)} due on ${invoice.dueDate.toISOString().slice(0, 10)}.`,
-              `fee-reminder-${invoice.id}-${day}`,
-            );
+        this.realtime.campus(structure.session.campusId, 'fees');
+      } catch (error) {
+        console.error(
+          'Monthly billing failed for a fee structure',
+          structure.id,
+          (error as Error).message,
+        );
       }
     }
+  }
+  async feeReminders(only?: string[]) {
+    const day = today();
+    for (const orgId of await this.liveOrganizations(only)) {
+      const p = await this.settings.policy(orgId);
+      if (!p.feeRemindersEnabled) continue;
+      const dueDays = [
+        day,
+        new Date(Date.parse(day) + p.reminderDaysBefore * 86400000).toISOString().slice(0, 10),
+      ].map((d) => new Date(d));
+      const invoices = await this.db.invoice.findMany({
+        where: {
+          status: { in: ['DUE', 'PARTIAL'] },
+          dueDate: { in: dueDays },
+          session: { status: { not: 'CLOSED' } },
+          student: { campus: { orgId } },
+        },
+        include: {
+          student: {
+            include: { guardians: { where: { isPrimary: true }, include: { guardian: true } } },
+          },
+        },
+      });
+      for (const invoice of invoices)
+        await this.enqueuePush(
+          invoice.student.guardians.map((g) => g.guardianUserId),
+          'fees',
+          `${invoice.id}-${day}`,
+          { studentId: invoice.studentId },
+        );
+      for (const invoice of invoices)
+        for (const g of invoice.student.guardians)
+          if (g.guardian.phone)
+            await this.sms(
+              invoice.student.campusId,
+              g.guardian.phone,
+              `Fee reminder for ${invoice.student.fullName}: BDT ${((invoice.totalMinor + invoice.fineMinor - invoice.waivedMinor - invoice.paidMinor) / 100).toFixed(2)} due on ${invoice.dueDate.toISOString().slice(0, 10)}.`,
+              `fee-reminder-${invoice.id}-${day}`,
+            );
+    }
+  }
+  async offerExpiry() {
+    const now = new Date();
     const expired = await this.db.seatOffer.findMany({
       where: { status: 'OFFERED', application: { offerExpiresAt: { lt: now } } },
+      include: { section: { include: { schoolClass: { include: { campus: true } } } } },
+      take: 200,
     });
-    for (const offer of expired)
+    for (const offer of expired) {
+      const policy = await this.settings.policy(offer.section.schoolClass.campus.orgId);
       await this.db.serial(async (tx) => {
         await tx.$queryRaw`SELECT id FROM "Section" WHERE id = ${offer.sectionId} FOR UPDATE`;
         const current = await tx.seatOffer.findUniqueOrThrow({
@@ -295,7 +397,10 @@ export class Jobs implements OnModuleInit, OnModuleDestroy {
         if (next) {
           await tx.admissionApplication.update({
             where: { id: next.id },
-            data: { status: 'OFFERED', offerExpiresAt: new Date(Date.now() + 48 * 3600_000) },
+            data: {
+              status: 'OFFERED',
+              offerExpiresAt: new Date(Date.now() + policy.admissionOfferHours * 3600_000),
+            },
           });
           await tx.seatOffer.upsert({
             where: { applicationId: next.id },
@@ -304,5 +409,6 @@ export class Jobs implements OnModuleInit, OnModuleDestroy {
           });
         }
       });
+    }
   }
 }

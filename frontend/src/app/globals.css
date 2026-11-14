@@ -2185,3 +2185,93 @@ label {
     padding-right: 18px;
   }
 }
+/* Account security: verification, reset and two-step sign-in */
+.link-button {
+  border: 0;
+  background: none;
+  padding: 4px 0;
+  color: var(--green);
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+.link-button:hover {
+  text-decoration: underline;
+}
+.verify-choice {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.verify-choice legend {
+  padding: 0 6px;
+  font-weight: 600;
+}
+.inline-choice {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+.inline-choice input {
+  width: auto;
+}
+.code-row {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+.code-row input {
+  flex: 1;
+  min-width: 0;
+  letter-spacing: 0.2em;
+}
+.recovery-codes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--green-light);
+  font-family: ui-monospace, Menlo, monospace;
+}
+@media (max-width: 520px) {
+  .code-row {
+    flex-direction: column;
+  }
+}
+.row-actions {
+  white-space: nowrap;
+  text-align: right;
+}
+.row-actions .button {
+  padding-inline: 8px;
+}
+.mfa-banner {
+  margin: 0 0 18px;
+}
+.policy-list {
+  display: grid;
+  grid-template-columns: minmax(160px, 260px) 1fr;
+  gap: 10px 20px;
+  margin: 0;
+}
+.policy-list dt {
+  color: var(--muted);
+}
+.policy-list dd {
+  margin: 0;
+  font-weight: 500;
+}
+@media (max-width: 640px) {
+  .policy-list {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+  .policy-list dd {
+    margin-bottom: 10px;
+  }
+}

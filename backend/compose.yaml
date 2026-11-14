@@ -34,6 +34,7 @@ services:
       APP_URL: ${APP_URL:-http://localhost:3000}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       NODE_ENV: production
+      RUN_JOBS: 'false'
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       PAYMENT_MODE: ${PAYMENT_MODE:-manual}
       SMS_PROVIDER: ${SMS_PROVIDER:-console}
@@ -43,6 +44,11 @@ services:
       SMS_API_URL: ${SMS_API_URL:-}
       SMS_API_KEY: ${SMS_API_KEY:-}
       SMS_SENDER_ID: ${SMS_SENDER_ID:-}
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-console}
+      OTP_DEBUG: ${OTP_DEBUG:-false}
+      MFA_ENFORCE: ${MFA_ENFORCE:-false}
+      TRUST_PROXY: ${TRUST_PROXY:-loopback,uniquelocal}
+      DOCUMENT_TOKEN_SECRET: ${DOCUMENT_TOKEN_SECRET:-}
       SEED_PASSWORD: ${SEED_PASSWORD:-}
       PLATFORM_ADMIN_EMAIL: ${PLATFORM_ADMIN_EMAIL:-platform@campusone.edu.bd}
       PLATFORM_SEED_PASSWORD: ${PLATFORM_SEED_PASSWORD:-}
@@ -50,7 +56,7 @@ services:
       ADMISSION_OFFER_HOURS: ${ADMISSION_OFFER_HOURS:-48}
       SIBLING_DISCOUNT_BPS: ${SIBLING_DISCOUNT_BPS:-0}
       FEE_REMINDERS_ENABLED: ${FEE_REMINDERS_ENABLED:-false}
-      DOCUMENT_ENCRYPTION_KEY: ${DOCUMENT_ENCRYPTION_KEY:-}
+      DOCUMENT_ENCRYPTION_KEY: ${DOCUMENT_ENCRYPTION_KEY:?Set DOCUMENT_ENCRYPTION_KEY in .env}
       SCHOOL_SITE_BASE_DOMAIN: ${SCHOOL_SITE_BASE_DOMAIN:-localhost}
       SCHOOL_SITE_CNAME_TARGET: ${SCHOOL_SITE_CNAME_TARGET:-}
     ports: ['127.0.0.1:4000:4000']
@@ -68,6 +74,30 @@ services:
       interval: 10s
       timeout: 5s
       retries: 20
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ['node', 'dist/worker.js']
+    environment:
+      DATABASE_URL: postgresql://campus:${POSTGRES_PASSWORD:-campus_local}@postgres:5432/campus_one?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?Set JWT_ACCESS_SECRET in .env}
+      DOCUMENT_ENCRYPTION_KEY: ${DOCUMENT_ENCRYPTION_KEY:?Set DOCUMENT_ENCRYPTION_KEY in .env}
+      NODE_ENV: production
+      RUN_JOBS: 'true'
+      SMS_PROVIDER: ${SMS_PROVIDER:-console}
+      SMS_API_URL: ${SMS_API_URL:-}
+      SMS_API_KEY: ${SMS_API_KEY:-}
+      SMS_SENDER_ID: ${SMS_SENDER_ID:-}
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-console}
+      FEE_FINE_PER_DAY_MINOR: ${FEE_FINE_PER_DAY_MINOR:-1000}
+      ADMISSION_OFFER_HOURS: ${ADMISSION_OFFER_HOURS:-48}
+      SIBLING_DISCOUNT_BPS: ${SIBLING_DISCOUNT_BPS:-0}
+      FEE_REMINDERS_ENABLED: ${FEE_REMINDERS_ENABLED:-false}
+      FCM_SERVICE_ACCOUNT: ${FCM_SERVICE_ACCOUNT:-}
+    depends_on:
+      api: { condition: service_healthy }
   web:
     build:
       context: ../frontend

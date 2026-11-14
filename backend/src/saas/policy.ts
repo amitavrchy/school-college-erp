@@ -102,6 +102,7 @@ export async function requireQuota(
         : await tx.user.count({
             where: {
               roles: { some: { campus: { orgId }, role: { notIn: ['GUARDIAN', 'STUDENT'] } } },
+              memberships: { some: { organizationId: orgId, active: true } },
             },
           });
   const maximum =

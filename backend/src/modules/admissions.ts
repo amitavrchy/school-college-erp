@@ -1,3 +1,5 @@
+import { Settings } from '../settings';
+import { signCapability } from '../auth/capability';
 import {
   BadRequestException,
   Body,
@@ -26,6 +28,7 @@ export class AdmissionsController {
     @Inject(Scope) private scope: Scope,
     @Inject(Audit) private audit: Audit,
     @Inject(JwtService) private jwt: JwtService,
+    @Inject(Settings) private settings: Settings,
   ) {}
   @Public()
   @Get('options')
@@ -73,10 +76,7 @@ export class AdmissionsController {
     return {
       id: app.id,
       status: app.status,
-      uploadToken: await this.jwt.signAsync(
-        { sub: app.id, purpose: 'ADMISSION_UPLOAD' },
-        { expiresIn: '24h' },
-      ),
+      uploadToken: await signCapability(this.jwt, app.id, 'ADMISSION_UPLOAD', '24h'),
       message: 'Application received. Please keep your application ID.',
     };
   }
@@ -170,7 +170,7 @@ export class AdmissionsController {
         data: {
           status: 'OFFERED',
           offerExpiresAt: new Date(
-            Date.now() + Number(process.env.ADMISSION_OFFER_HOURS || 48) * 3600_000,
+            Date.now() + (await this.settings.policy(c.orgId, tx)).admissionOfferHours * 3600_000,
           ),
         },
       });

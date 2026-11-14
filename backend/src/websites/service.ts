@@ -1,3 +1,4 @@
+import { readClaims, signClaims } from '../auth/capability';
 import {
   BadRequestException,
   ConflictException,
@@ -23,7 +24,7 @@ export class Websites {
     @Inject(JwtService) readonly jwt: JwtService,
   ) {}
   baseDomain() {
-    return (process.env.SCHOOL_SITE_BASE_DOMAIN || 'localhost').toLowerCase();
+    return config.SCHOOL_SITE_BASE_DOMAIN.toLowerCase();
   }
   appOrigin() {
     return new URL(config.APP_URL).origin;
@@ -53,7 +54,7 @@ export class Websites {
     return {
       site,
       baseDomain: this.baseDomain(),
-      cnameTarget: process.env.SCHOOL_SITE_CNAME_TARGET || '',
+      cnameTarget: config.SCHOOL_SITE_CNAME_TARGET || '',
       subdomainUrl: site ? this.siteOrigin(site.subdomain) : null,
       appOrigin: this.appOrigin(),
     };
@@ -150,9 +151,10 @@ export class Websites {
   }
   async preview(c: Context) {
     const site = await this.owned(c);
-    const token = await this.jwt.signAsync(
+    const token = await signClaims(
+      this.jwt,
       { purpose: 'website-preview', websiteId: site.id },
-      { expiresIn: '15m' },
+      '15m',
     );
     return { url: `/school/${site.subdomain}?preview=${token}`, expiresIn: 900 };
   }
@@ -187,12 +189,8 @@ export class Websites {
       throw new NotFoundException('School website not found');
     let content: WebsiteContent;
     if (preview) {
-      let claim;
-      try {
-        claim = await this.jwt.verifyAsync(preview);
-      } catch {
-        throw new ForbiddenException('Preview link expired');
-      }
+      const claim = await readClaims(this.jwt, preview);
+      if (!claim) throw new ForbiddenException('Preview link expired');
       if (claim.purpose !== 'website-preview' || claim.websiteId !== site.id)
         throw new ForbiddenException('Invalid preview link');
       content = contentSchema.parse(site.draft);
@@ -264,7 +262,7 @@ export class Websites {
     const domain = await this.db.websiteDomain.findFirstOrThrow({
       where: { id: domainId, websiteId: site.id },
     });
-    const target = process.env.SCHOOL_SITE_CNAME_TARGET;
+    const target = config.SCHOOL_SITE_CNAME_TARGET;
     if (!target)
       throw new ServiceUnavailableException(
         'The platform must configure its domain routing target first',

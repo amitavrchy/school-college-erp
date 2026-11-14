@@ -1,0 +1,8 @@
+{
+  "SCHOOL_SLUG": "scholars",
+  "APP_NAME": "Scholars Academy",
+  "APP_NAME_BN": "স্কলার্স একাডেমি",
+  "API_URL": "http://10.0.2.2:4000/api",
+  "ACCENT": "#22644F",
+  "ANDROID_APP_ID": "com.campusone.scholars"
+}

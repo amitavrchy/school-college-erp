@@ -79,8 +79,9 @@ export class AttendanceController {
     });
     if (enrollments.length !== v.records.length)
       throw new BadRequestException('A student is outside this section');
-    await this.db.$transaction(
-      v.records.map((r) =>
+    // One batch transaction: the audit entry commits together with the attendance rows.
+    await this.db.$transaction([
+      ...v.records.map((r) =>
         this.db.attendanceRecord.upsert({
           where: {
             enrollmentId_date_period: {
@@ -93,14 +94,14 @@ export class AttendanceController {
           update: { status: r.status, markedBy: c.userId },
         }),
       ),
-    );
+      this.audit.log(c, 'BULK_MARK', 'Attendance', v.sectionId, {
+        date: v.date.toISOString(),
+        count: v.records.length,
+      }),
+    ]);
     for (const r of v.records)
       if (r.status === 'ABSENT' && v.period === 0)
         await this.jobs.enqueueAbsence(r.enrollmentId, v.date.toISOString().slice(0, 10));
-    await this.audit.log(c, 'BULK_MARK', 'Attendance', v.sectionId, {
-      date: v.date.toISOString(),
-      count: v.records.length,
-    });
     this.live.campus(c.campusId, 'attendance');
     return { saved: v.records.length };
   }

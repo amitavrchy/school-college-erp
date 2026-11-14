@@ -12,6 +12,8 @@ import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { Db } from '../db';
 import { requireSubscription } from '../saas/policy';
+import { config } from '../config';
+import { requiresMfa } from './session';
 export const ROLES = [
   'SUPER_ADMIN',
   'CAMPUS_ADMIN',
@@ -61,7 +63,7 @@ export class AccessGuard implements CanActivate {
     if (this.reflector.getAllAndOverride('public', [context.getHandler(), context.getClass()]))
       return true;
     const req = context.switchToHttp().getRequest();
-    let claims: { sub: string; v: number };
+    let claims: { sub: string; v: number; org?: string };
     try {
       claims = await this.jwt.verifyAsync(
         req.cookies?.campus_session || req.headers.authorization?.replace(/^Bearer /, ''),
@@ -79,6 +81,12 @@ export class AccessGuard implements CanActivate {
     const platform = this.reflector.getAllAndOverride<boolean>('platformOnly', targets);
     const account = this.reflector.getAllAndOverride<boolean>('accountAccess', targets);
     const billing = this.reflector.getAllAndOverride<boolean>('billingAccess', targets);
+    if (config.MFA_ENFORCE && !account && !user.mfaEnabledAt && requiresMfa(user))
+      throw new ForbiddenException(
+        'Set up two-step sign-in from your account settings before continuing',
+      );
+    // School-app tokens are locked to that school's organisation.
+    if (platform && claims.org) throw new ForbiddenException('Use the web console for this');
     if (platform) {
       if (!user.platformAdmin)
         throw new ForbiddenException('Platform administrator access is required');
@@ -92,16 +100,24 @@ export class AccessGuard implements CanActivate {
       } satisfies Context;
       return true;
     }
-    const campusId = req.headers['x-campus-id'] || user.roles[0]?.campusId;
+    const campusId =
+      req.headers['x-campus-id'] ||
+      (claims.org ? user.roles.find((r) => r.campus.orgId === claims.org) : user.roles[0])
+        ?.campusId;
     const roles = user.roles.filter((r) => r.campusId === campusId).map((r) => r.role as Role);
     if (!roles.length && !account)
       throw new ForbiddenException('You do not have access to this campus');
     const orgId = user.roles.find((r) => r.campusId === campusId)?.campus.orgId || '';
+    // A named campus outside the token's school is refused, even on account routes.
+    if (claims.org && (orgId || req.headers['x-campus-id']) && orgId !== claims.org)
+      throw new ForbiddenException('This app is for a different school');
     if (
       !account &&
-      !(await this.db.organizationMember.findUnique({
-        where: { organizationId_userId: { organizationId: orgId, userId: user.id } },
-      }))
+      !(
+        await this.db.organizationMember.findUnique({
+          where: { organizationId_userId: { organizationId: orgId, userId: user.id } },
+        })
+      )?.active
     )
       throw new ForbiddenException('You are not a member of this institution');
     const required = this.reflector.getAllAndOverride<Role[]>('roles', [

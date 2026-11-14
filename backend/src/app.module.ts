@@ -4,11 +4,16 @@ import { JwtModule } from '@nestjs/jwt';
 import { config } from './config';
 import { Db } from './db';
 import { Audit } from './audit';
+import { Notifier } from './notify';
+import { Push } from './push';
+import { OneTimeCodes } from './auth/otp';
 import { Jobs } from './jobs';
-import { Realtime } from './realtime';
+import { Realtime, RealtimeGateway } from './realtime';
+import { Settings, SettingsController } from './settings';
 import { AccessGuard } from './auth/access';
 import { Scope } from './auth/scope';
 import { AuthController } from './auth/auth.controller';
+import { MobileController } from './auth/mobile.controller';
 import { CampusesController } from './modules/campuses';
 import { AcademicsController } from './modules/academics';
 import { StudentsController } from './modules/students';
@@ -46,6 +51,7 @@ import { WebsiteController, PublicWebsitesController } from './websites/controll
   ],
   controllers: [
     AuthController,
+    MobileController,
     HealthController,
     WebsiteController,
     PublicWebsitesController,
@@ -69,6 +75,7 @@ import { WebsiteController, PublicWebsitesController } from './websites/controll
     TransportController,
     HomeworkController,
     SupportController,
+    SettingsController,
   ],
   providers: [
     Db,
@@ -76,8 +83,14 @@ import { WebsiteController, PublicWebsitesController } from './websites/controll
     WebsiteResults,
     Saas,
     Audit,
+    Notifier,
+    Push,
+    OneTimeCodes,
+    MobileController,
     Scope,
     Realtime,
+    RealtimeGateway,
+    Settings,
     Jobs,
     Billing,
     PaymentService,

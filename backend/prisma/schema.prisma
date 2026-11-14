@@ -8,6 +8,8 @@ model OrganizationMember {
   userId String
   user User @relation(fields: [userId], references: [id])
   role String @default("MEMBER")
+  /// Deactivation is per institution so one school cannot lock a person out of another.
+  active Boolean @default(true)
   @@unique([organizationId, userId])
 }
 model SubscriptionPlan {
@@ -74,6 +76,59 @@ model PlatformSettings {
   bankInstructions String?
   paymentInstructions String @default("Send the exact subscription amount, then submit your transaction reference. The platform team reviews every request before activation.")
   supportEmail String?
+  /// Online fee checkout stays off until the platform team has reviewed settlement (audit R-S2).
+  onlineFeesEnabled Boolean @default(false)
+}
+model OneTimeCode {
+  id String @id @default(cuid())
+  purpose String
+  contact String
+  codeHash String
+  attempts Int @default(0)
+  expiresAt DateTime
+  consumedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([contact, purpose, createdAt])
+}
+/// Mobile app sessions: one rotating refresh token per signed-in device.
+model RefreshToken {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id])
+  /// The school whose app this session belongs to; the session cannot reach another school.
+  organizationId String
+  tokenHash String @unique
+  /// Every rotation keeps the family id, so reuse of an old token revokes the whole chain.
+  familyId String
+  /// User.tokenVersion when issued; a password change or sign-out-everywhere invalidates it.
+  tokenVersion Int
+  deviceName String?
+  expiresAt DateTime
+  revokedAt DateTime?
+  replacedById String?
+  lastUsedAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  @@index([userId, revokedAt])
+  @@index([familyId])
+}
+/// Phones registered for push notifications (FCM).
+model Device {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id])
+  organizationId String
+  platform String
+  pushToken String @unique
+  appVersion String?
+  locale String?
+  lastSeenAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  @@index([userId])
+}
+model TrialClaim {
+  contact String @id
+  organizationId String
+  createdAt DateTime @default(now())
 }
 model LibraryBook {
   id String @id @default(cuid())
@@ -240,6 +295,32 @@ model Organization {
   subscriptionEvents SubscriptionEvent[]
   tickets SupportTicket[]
   website SchoolWebsite?
+  settings OrganizationSettings?
+}
+/// School policy and branding. Defaults match the previous environment-wide behaviour.
+model OrganizationSettings {
+  organizationId String @id
+  organization Organization @relation(fields: [organizationId], references: [id])
+  lateFineMode String @default("PER_DAY")
+  lateFinePerDayMinor Int @default(1000)
+  lateFineFlatMinor Int @default(0)
+  lateFineCapMinor Int @default(50000)
+  invoiceDueDay Int @default(10)
+  siblingDiscountBps Int @default(0)
+  feeRemindersEnabled Boolean @default(false)
+  reminderDaysBefore Int @default(3)
+  admissionOfferHours Int @default(48)
+  waiverPrincipalThresholdMinor Int @default(100000)
+  institutionNameBn String?
+  address String?
+  phone String?
+  email String?
+  eiin String?
+  logoData Bytes?
+  logoMime String?
+  receiptFooter String?
+  principalName String?
+  updatedAt DateTime @updatedAt
 }
 model SchoolWebsite {
   id String @id @default(cuid())
@@ -342,7 +423,8 @@ model AcademicSession {
 }
 model User {
   id String @id @default(cuid())
-  email String @unique
+  /// Optional: guardians and students may sign in with their phone number instead.
+  email String? @unique
   phone String?
   fullName String
   fullNameBn String?
@@ -350,6 +432,13 @@ model User {
   active Boolean @default(true)
   tokenVersion Int @default(0)
   platformAdmin Boolean @default(false)
+  emailVerifiedAt DateTime?
+  phoneVerifiedAt DateTime?
+  mfaSecret String?
+  mfaEnabledAt DateTime?
+  mfaRecoveryHashes String[] @default([])
+  refreshTokens RefreshToken[]
+  devices Device[]
   memberships OrganizationMember[]
   tickets SupportTicket[]
   ticketComments TicketComment[]
@@ -388,6 +477,18 @@ model Student {
   dob DateTime? @db.Date
   gender String?
   bloodGroup String?
+  fatherName String?
+  motherName String?
+  presentAddress String?
+  permanentAddress String?
+  birthRegNo String?
+  religion String?
+  nationality String? @default("Bangladeshi")
+  photoKey String?
+  /// Contact captured at admission/import; becomes a guardian account when invited.
+  guardianName String?
+  guardianPhone String?
+  status String @default("ACTIVE")
   guardians GuardianStudent[]
   enrollments Enrollment[]
   invoices Invoice[]
@@ -441,6 +542,7 @@ model Enrollment {
   attendance AttendanceRecord[]
   marks ExamMark[]
   @@unique([studentId, sessionId])
+  @@unique([sectionId, rollNumber])
   @@index([sectionId])
 }
 model Subject {
@@ -563,6 +665,8 @@ model FeeStructure {
   classId String
   schoolClass SchoolClass @relation(fields: [classId], references: [id])
   name String
+  /// YYYY-MM of the last automatic monthly run, so the daily job bills each month once.
+  lastGeneratedMonth String?
   heads FeeHead[]
 }
 model FeeHead {
@@ -572,6 +676,17 @@ model FeeHead {
   name String
   amountMinor Int
   frequency String @default("MONTHLY")
+  siblingDiscountEligible Boolean @default(false)
+  charges FeeHeadCharge[]
+}
+/// One-time heads charged per enrolment, so mid-session admissions are billed exactly once.
+model FeeHeadCharge {
+  enrollmentId String
+  feeHeadId String
+  feeHead FeeHead @relation(fields: [feeHeadId], references: [id])
+  invoiceId String
+  createdAt DateTime @default(now())
+  @@id([enrollmentId, feeHeadId])
 }
 model Invoice {
   id String @id @default(cuid())
@@ -610,7 +725,23 @@ model Payment {
   providerRef String? @unique
   paidAt DateTime?
   createdAt DateTime @default(now())
+  /// Human-readable receipt number, sequential per campus and calendar year (e.g. MAIN-2026-000042).
+  receiptNo String?
+  receiptCampusId String?
+  recordedBy String?
+  voidReason String?
+  voidRequestedBy String?
+  voidRequestedAt DateTime?
+  voidedBy String?
+  voidedAt DateTime?
   allocations PaymentAllocation[]
+  @@unique([receiptCampusId, receiptNo])
+}
+model ReceiptCounter {
+  campusId String
+  year Int
+  next Int @default(1)
+  @@id([campusId, year])
 }
 model PaymentAllocation {
   id String @id @default(cuid())
@@ -647,6 +778,7 @@ model Notice {
   scheduledAt DateTime?
   createdAt DateTime @default(now())
   messages SmsMessage[]
+  @@index([status, scheduledAt])
 }
 model SmsMessage {
   id String @id @default(cuid())
@@ -662,6 +794,7 @@ model SmsMessage {
 }
 model TimetableSlot {
   id String @id @default(cuid())
+  sessionId String
   sectionId String
   section Section @relation(fields: [sectionId], references: [id])
   dayOfWeek Int
@@ -670,8 +803,8 @@ model TimetableSlot {
   subject Subject @relation(fields: [subjectId], references: [id])
   teacherId String
   room String?
-  @@unique([sectionId, dayOfWeek, period])
-  @@unique([teacherId, dayOfWeek, period])
+  @@unique([sessionId, sectionId, dayOfWeek, period])
+  @@unique([sessionId, teacherId, dayOfWeek, period])
 }
 model Holiday {
   id String @id @default(cuid())
