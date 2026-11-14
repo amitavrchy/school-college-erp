@@ -24,6 +24,19 @@ proxied by Next.js to `http://erp-backend:4000` over `apps-net` (`API_INTERNAL_U
 - **Redis is required**: BullMQ jobs (SMS, absence alerts, maintenance) run in the API process and `/api/health` pings it.
 - `/opt/apps/erp/.env` created from `deploy/.env.example` (`chmod 600`).
 
+## Upgrade notes — security hardening (Stage 1)
+
+Before deploying this release, add to `/opt/apps/erp/.env`:
+
+| Variable | Why |
+|---|---|
+| `DOCUMENT_ENCRYPTION_KEY` | **Now required in production** — the API refuses to start without it. If documents were uploaded while it was empty, they stay readable (the old derived key is kept for decryption only). Generate with `openssl rand -hex 32`. |
+| `TRUST_PROXY=loopback,uniquelocal` | Rate limits now key on the real client address; without this every user behind Nginx shares one bucket. |
+| `EMAIL_PROVIDER` / `SMS_PROVIDER` | Self-service sign-up and password reset send one-time codes. With both on `console`, codes are not delivered and new schools cannot sign up. |
+| `MFA_ENFORCE` (optional) | Leave `false` until platform admins and school SUPER_ADMINs have enrolled under Settings → Account, then set `true`. |
+
+Deploys now run only after the `CI` workflow passes on `main` (typecheck, unit, integration and browser tests).
+
 ## First admin
 
 Platform owner only (no demo data):

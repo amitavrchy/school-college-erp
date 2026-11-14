@@ -1,0 +1,70 @@
+name: CI
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  static:
+    name: Typecheck and unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+      - run: npm --prefix backend ci
+      - run: npm --prefix frontend ci
+      - run: npm --prefix backend run db:generate
+      - run: npm --prefix backend run typecheck
+      - run: npm --prefix backend test
+      - run: npm --prefix frontend run typecheck
+      - run: npm --prefix backend audit --audit-level=high
+      - run: npm --prefix frontend audit --audit-level=high
+
+  integration:
+    name: Integration and browser tests (Postgres + Redis)
+    needs: static
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+      - run: npm --prefix backend ci
+      - run: npm --prefix frontend ci
+      - run: npm --prefix backend run db:generate
+      # Creates backend/.env with random secrets; .env.example sets OTP_DEBUG=true for test sign-ups.
+      - run: cd backend && npm run setup
+      - run: docker compose --env-file backend/.env -f backend/compose.yaml up --build -d --wait
+      - run: docker compose --env-file backend/.env -f backend/compose.yaml exec -T api npx prisma migrate deploy
+      - run: docker compose --env-file backend/.env -f backend/compose.yaml exec -T api npm run db:seed
+      - run: cd frontend && npx playwright install --with-deps chrome
+      - run: npm --prefix backend run test:integration
+      - run: npm --prefix frontend run test:e2e
+      - if: failure()
+        run: docker compose --env-file backend/.env -f backend/compose.yaml logs --tail=200
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-test-results
+          path: frontend/test-results/

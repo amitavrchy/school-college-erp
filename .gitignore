@@ -1,2 +1,28 @@
-config.bat
-node_modules
+# Dependencies and build output
+node_modules/
+.next/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Environment and secrets — never commit real values
+.env
+.env.*
+!.env.example
+
+# Test output
+frontend/test-results/
+frontend/playwright-report/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Script droppers seen in the November 2026 repository compromise; never legitimate here
+*.bat
+*.cmd
+*.vbs
+*.ps1
