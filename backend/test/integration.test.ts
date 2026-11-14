@@ -721,11 +721,14 @@ test(
       const { Billing } = await import('../src/modules/billing');
       const { Notifier } = await import('../src/notify');
       const { Settings } = await import('../src/settings');
-      const settings = new Settings(db as any);
+      const { Db } = await import('../src/db');
+      // The jobs need the application's Db (serializable `serial` transactions), not a bare client.
+      const appDb = new Db();
+      const settings = new Settings(appDb);
       const jobs = new Jobs(
-        db as any,
+        appDb,
         { user() {}, campus() {} } as any,
-        new Billing(db as any, settings),
+        new Billing(appDb, settings),
         new Notifier(),
         settings,
       );
@@ -756,6 +759,7 @@ test(
         );
       } finally {
         await jobs.onModuleDestroy();
+        await appDb.$disconnect();
       }
     });
     await t.test('student edit and import report results row by row', async () => {
