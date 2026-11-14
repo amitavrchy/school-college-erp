@@ -29,7 +29,7 @@ android {
 
     defaultConfig {
         applicationId = appId
-        resValue("string", "app_name", appName)
+        manifestPlaceholders["appName"] = appName
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
