@@ -617,8 +617,21 @@ test(
       );
     });
     await t.test('ad-hoc invoices, one-time fees and school fine policy', async () => {
+      // students[0] was transferred to campus B earlier, so its campus A enrolment is no longer
+      // active. Bill a student who is actively enrolled in campus A for this session.
+      const billingSection = await db.section.create({
+        data: { classId: classes[0].id, sessionId: sessions[0].id, name: 'Billing', capacity: 5 },
+      });
+      const billed = await db.student.create({
+        data: {
+          campusId: a.id,
+          studentCode: `${prefix}-billing`,
+          fullName: 'Billing student',
+          enrollments: { create: { sessionId: sessions[0].id, sectionId: billingSection.id } },
+        },
+      });
       const adhoc = await request('accounts', a.id, 'fees/invoices', {
-        studentId: students[0].id,
+        studentId: billed.id,
         dueDate: day,
         lines: [{ feeHeadName: 'Exam fee', amountMinor: 50000 }],
       });
@@ -665,7 +678,7 @@ test(
         db.invoiceLine.findMany({
           where: { invoice: { studentId, generationKey: { startsWith: structure.data.id } } },
         });
-      const first = await lines(students[0].id);
+      const first = await lines(billed.id);
       assert.equal(first.filter((l) => l.feeHeadName === 'Admission').length, 1);
       assert.equal(first.filter((l) => l.feeHeadName === 'Tuition').length, 2);
       const joiner = await lines(late.data.id);
@@ -697,7 +710,7 @@ test(
       );
       const overdue = await db.invoice.create({
         data: {
-          studentId: students[0].id,
+          studentId: billed.id,
           sessionId: sessions[0].id,
           dueDate: new Date(Date.parse(day) - 3 * 86400000),
           totalMinor: 9000,

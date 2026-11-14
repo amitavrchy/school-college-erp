@@ -372,16 +372,19 @@ test(
         const duplicate = await db.student.create({
           data: { campusId: a.campus.id, studentCode: 'CMS-002', fullName: 'Duplicate Roll' },
         });
-        const dupe = await db.enrollment.create({
-          data: {
-            studentId: duplicate.id,
-            sectionId: section.id,
-            sessionId: a.session.id,
-            rollNumber: '17',
-          },
-        });
-        assert.equal((await request('public-websites/' + a.slug + '/results', input)).status, 404);
-        await db.enrollment.delete({ where: { id: dupe.id } });
+        // Roll numbers are unique per section, so a public lookup can never match two students.
+        await assert.rejects(
+          db.enrollment.create({
+            data: {
+              studentId: duplicate.id,
+              sectionId: section.id,
+              sessionId: a.session.id,
+              rollNumber: '17',
+            },
+          }),
+          (e: { code?: string }) => e.code === 'P2002',
+        );
+        assert.equal((await request('public-websites/' + a.slug + '/results', input)).status, 201);
         await db.student.delete({ where: { id: duplicate.id } });
       },
     );
