@@ -197,6 +197,16 @@ export class PaymentsController {
       throw new BadRequestException(
         'Online payment needs a guardian with a mobile number on file. Ask the school office to add it.',
       );
-    return link.guardian as { fullName: string; email: string; phone: string };
+    // The gateway requires an email; guardians who sign in by phone fall back to the school's.
+    const school = await this.db.organizationSettings.findUnique({
+      where: { organizationId: c.orgId },
+      select: { email: true },
+    });
+    const email = link.guardian.email ?? school?.email;
+    if (!email)
+      throw new BadRequestException(
+        'Online payment needs an email for the receipt. Ask the school office to add one in School policy.',
+      );
+    return { fullName: link.guardian.fullName, phone: link.guardian.phone, email };
   }
 }

@@ -628,6 +628,120 @@ test(
       });
       assert.equal(reused.status, 401, 'recovery codes work once');
     });
+    await t.test(
+      'school app tokens: locked to one school, rotating refresh, phone sign-in',
+      async () => {
+        const call = async (
+          token: string,
+          campus: string,
+          path: string,
+          body?: unknown,
+          method?: string,
+        ) => {
+          const r = await fetch(`${base}/${path}`, {
+            method: method ?? (body === undefined ? 'GET' : 'POST'),
+            headers: {
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              ...(campus ? { 'x-campus-id': campus } : {}),
+              'Content-Type': 'application/json',
+            },
+            ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+          });
+          return { status: r.status, data: await r.json().catch(() => null) };
+        };
+        const config = await call('', '', `app/config?school=${a.organization.slug}`);
+        assert.equal(config.status, 200);
+        assert.equal(config.data.school.name, a.organization.name);
+        const signIn = await call('', '', 'auth/token', {
+          school: a.organization.slug,
+          email: a.user.email,
+          password,
+          deviceName: 'Test phone',
+        });
+        assert.equal(signIn.status, 201, JSON.stringify(signIn.data));
+        assert.ok(signIn.data.accessToken && signIn.data.refreshToken);
+        assert.equal((await call(signIn.data.accessToken, a.campus.id, 'classes')).status, 200);
+        assert.equal(
+          (
+            await call('', '', 'auth/token', {
+              school: b.organization.slug,
+              email: a.user.email,
+              password,
+            })
+          ).status,
+          403,
+          'an account cannot sign in to another school app',
+        );
+        // Rotation: the new refresh token works once; replaying the old one ends the chain.
+        const first = await call('', '', 'auth/refresh', {
+          refreshToken: signIn.data.refreshToken,
+        });
+        assert.equal(first.status, 201);
+        assert.notEqual(first.data.refreshToken, signIn.data.refreshToken);
+        assert.equal(
+          (await call('', '', 'auth/refresh', { refreshToken: signIn.data.refreshToken })).status,
+          401,
+        );
+        assert.equal(
+          (await call('', '', 'auth/refresh', { refreshToken: first.data.refreshToken })).status,
+          401,
+          'reuse of an old token revokes the newer one too',
+        );
+        // Phone-only guardian signs in with a one-time code.
+        const guardianPhone = `017${String(Date.now()).slice(-8)}`;
+        const guardian = await request(a.cookie, a.campus.id, 'users', {
+          fullName: 'Phone Guardian',
+          phone: guardianPhone,
+          role: 'GUARDIAN',
+        });
+        assert.equal(guardian.status, 201, JSON.stringify(guardian.data));
+        const unknown = await call('', '', 'auth/codes', {
+          purpose: 'GUARDIAN_LOGIN',
+          contact: '01999999999',
+          school: a.organization.slug,
+        });
+        assert.equal(unknown.status, 201);
+        assert.equal(unknown.data.debugCode, undefined, 'no code is created for an unknown number');
+        const code = await call('', '', 'auth/codes', {
+          purpose: 'GUARDIAN_LOGIN',
+          contact: guardianPhone,
+          school: a.organization.slug,
+        });
+        assert.ok(code.data.debugCode);
+        assert.equal(
+          (
+            await call('', '', 'auth/token/otp', {
+              school: b.organization.slug,
+              contact: guardianPhone,
+              code: code.data.debugCode,
+            })
+          ).status,
+          400,
+          'the code only works for the school that sent it',
+        );
+        const phoneSignIn = await call('', '', 'auth/token/otp', {
+          school: a.organization.slug,
+          contact: guardianPhone,
+          code: code.data.debugCode,
+        });
+        assert.equal(phoneSignIn.status, 201, JSON.stringify(phoneSignIn.data));
+        const device = await call(phoneSignIn.data.accessToken, a.campus.id, 'devices', {
+          platform: 'android',
+          pushToken: `test-push-token-${randomUUID()}`,
+          locale: 'bn',
+        });
+        assert.equal(device.status, 201, JSON.stringify(device.data));
+        assert.equal(
+          (await call(phoneSignIn.data.accessToken, b.campus.id, 'auth/me')).status,
+          403,
+          'a school app token cannot reach another school',
+        );
+        await db.device.deleteMany({ where: { userId: guardian.data.id } });
+        await db.refreshToken.deleteMany({
+          where: { userId: { in: [guardian.data.id, a.user.id] } },
+        });
+      },
+    );
     await t.test('expired subscriptions preserve reads and block operational writes', async () => {
       await db.subscription.update({
         where: { organizationId: a.organization.id },

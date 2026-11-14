@@ -58,18 +58,22 @@ export class OneTimeCodes {
    * Creates and sends a code. When `deliver` is false (e.g. a reset for an unknown account) the
    * caller still gets the same response shape so account existence is not revealed.
    */
-  async issue(purpose: CodePurpose, contact: string, deliver = true) {
+  /**
+   * `key` scopes the code when the same phone may belong to accounts in several schools
+   * (school-app sign-in uses "<organisation id>:<phone>"); the message still goes to `contact`.
+   */
+  async issue(purpose: CodePurpose, contact: string, deliver = true, key = contact) {
     const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
     if (deliver) {
       await this.db.oneTimeCode.updateMany({
-        where: { contact, purpose, consumedAt: null },
+        where: { contact: key, purpose, consumedAt: null },
         data: { consumedAt: new Date() },
       });
       await this.db.oneTimeCode.create({
         data: {
           purpose,
-          contact,
-          codeHash: hashCode(purpose, contact, code),
+          contact: key,
+          codeHash: hashCode(purpose, key, code),
           expiresAt: new Date(Date.now() + TTL_MS),
         },
       });

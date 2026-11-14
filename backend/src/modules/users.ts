@@ -19,6 +19,7 @@ import type { Prisma } from '@prisma/client';
 import { Db } from '../db';
 import { Actor, Context, Roles, ADMIN, ROLES, Role, hasRole } from '../auth/access';
 import { parse, phone } from '../common';
+import { normalizeContact } from '../auth/otp';
 import { Audit } from '../audit';
 import { requireQuota } from '../saas/policy';
 const NON_STAFF = ['GUARDIAN', 'STUDENT'];
@@ -67,8 +68,11 @@ export class UsersController {
     const v = parse(
       z.object({
         fullName: z.string().min(2).max(100),
-        email: z.email().transform((s) => s.toLowerCase()),
-        phone: phone.optional(),
+        email: z
+          .email()
+          .transform((s) => s.toLowerCase())
+          .optional(),
+        phone: phone.transform((p) => normalizeContact(p)).optional(),
         password: z.string().min(12).max(100).optional(),
         role,
         attachExisting: z.boolean().default(false),
@@ -76,22 +80,36 @@ export class UsersController {
       body,
     );
     this.assertCanGrant(c, [v.role]);
-    const existing = await this.db.user.findUnique({
-      where: { email: v.email },
-      select: { id: true, fullName: true },
-    });
+    const phoneOnly = !v.email;
+    // Guardians and students may have only a mobile number; they sign in with a one-time code.
+    if (phoneOnly && (!v.phone || !NON_STAFF.includes(v.role)))
+      throw new BadRequestException(
+        'Staff need an email address; guardians and students need an email or a mobile number',
+      );
+    const existing = v.email
+      ? await this.db.user.findUnique({
+          where: { email: v.email },
+          select: { id: true, fullName: true },
+        })
+      : await this.db.user.findFirst({
+          where: { phone: v.phone, memberships: { some: { organizationId: c.orgId } } },
+          select: { id: true, fullName: true },
+        });
     if (existing && !v.attachExisting)
       throw new ConflictException({
         statusCode: 409,
         code: 'USER_EXISTS',
-        message: `An account with this email already exists (${existing.fullName}). Confirm to add that person to this institution.`,
+        message: `An account with this ${phoneOnly ? 'mobile number' : 'email'} already exists (${existing.fullName}). Confirm to add that person to this institution.`,
       });
-    if (!existing && !v.password)
+    if (!existing && !v.password && !phoneOnly)
       throw new BadRequestException('A password is required for a new account');
-    const passwordHash = existing ? undefined : await hash(v.password!, 12);
+    // Phone-only accounts get an unusable random password; they sign in by one-time code.
+    const passwordHash = existing
+      ? undefined
+      : await hash(v.password ?? randomBytes(24).toString('base64url'), 12);
     return this.db.serial(async (tx) => {
       if (!NON_STAFF.includes(v.role)) await requireQuota(tx, c.orgId, 'staff');
-      let user: { id: string; fullName: string; email: string };
+      let user: { id: string; fullName: string; email: string | null };
       if (existing) {
         await tx.organizationMember.upsert({
           where: { organizationId_userId: { organizationId: c.orgId, userId: existing.id } },

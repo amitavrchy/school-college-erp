@@ -81,6 +81,14 @@ async function main() {
     limiter('login', { windowMs: 15 * 60_000, limit: 30, keyGenerator: loginBucket }),
   );
   app.use(
+    '/api/auth/token',
+    limiter('app-token', { windowMs: 15 * 60_000, limit: 30, keyGenerator: loginBucket }),
+  );
+  app.use(
+    '/api/auth/refresh',
+    limiter('app-refresh', { windowMs: 15 * 60_000, limit: 300, keyGenerator: ipBucket }),
+  );
+  app.use(
     '/api/auth/mfa/login',
     limiter('mfa', { windowMs: 15 * 60_000, limit: 20, keyGenerator: ipBucket }),
   );

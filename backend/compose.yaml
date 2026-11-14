@@ -95,6 +95,7 @@ services:
       ADMISSION_OFFER_HOURS: ${ADMISSION_OFFER_HOURS:-48}
       SIBLING_DISCOUNT_BPS: ${SIBLING_DISCOUNT_BPS:-0}
       FEE_REMINDERS_ENABLED: ${FEE_REMINDERS_ENABLED:-false}
+      FCM_SERVICE_ACCOUNT: ${FCM_SERVICE_ACCOUNT:-}
     depends_on:
       api: { condition: service_healthy }
   web:

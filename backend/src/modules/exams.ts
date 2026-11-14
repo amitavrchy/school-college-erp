@@ -9,7 +9,9 @@ import {
   Patch,
   Post,
   Query,
+  Optional,
 } from '@nestjs/common';
+import { Jobs } from '../jobs';
 import { z } from 'zod';
 import { Db } from '../db';
 import { Actor, Context, Roles, TEACHING, ACADEMIC, hasRole } from '../auth/access';
@@ -22,6 +24,7 @@ export class ExamsController {
   constructor(
     @Inject(Db) private db: Db,
     @Inject(Scope) private scope: Scope,
+    @Optional() @Inject(Jobs) private jobs?: Jobs,
   ) {}
   @Get('terms')
   terms(@Actor() c: Context) {
@@ -174,7 +177,7 @@ export class ExamsController {
   @Post('terms/:id/publish')
   @Roles(...ACADEMIC)
   async publish(@Actor() c: Context, @Param('id') termId: string) {
-    return this.db.serial(async (tx) => {
+    const published = await this.db.serial(async (tx) => {
       const term = await tx.examTerm.findFirstOrThrow({
         where: {
           id: termId,
@@ -208,6 +211,19 @@ export class ExamsController {
       });
       return tx.examTerm.update({ where: { id: termId }, data: { status: 'PUBLISHED' } });
     });
+    const guardians = await this.db.guardianStudent.findMany({
+      where: {
+        student: { enrollments: { some: { sessionId: published.sessionId, status: 'ACTIVE' } } },
+      },
+      select: { guardianUserId: true },
+    });
+    await this.jobs?.enqueuePush(
+      guardians.map((g) => g.guardianUserId),
+      'results',
+      termId,
+      { termId },
+    );
+    return published;
   }
   @Get('results/:studentId')
   async results(@Actor() c: Context, @Param('studentId') studentId: string) {

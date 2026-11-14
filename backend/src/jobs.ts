@@ -1,4 +1,5 @@
-import { Inject, Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable, OnModuleInit, OnModuleDestroy, Optional } from '@nestjs/common';
+import { Push, type PushEvent } from './push';
 import { Queue, Worker } from 'bullmq';
 import IORedis from 'ioredis';
 import { Db } from './db';
@@ -62,7 +63,24 @@ export class Jobs implements OnModuleInit, OnModuleDestroy {
     @Inject(Billing) private billing: Billing,
     @Inject(Notifier) private notifier: Notifier,
     @Inject(Settings) private settings: Settings,
+    @Optional() @Inject(Push) private push?: Push,
   ) {}
+  /**
+   * Queues a push to these users' phones. `key` de-duplicates (one push per event and record);
+   * pushes are best effort and never block the action that caused them.
+   */
+  async enqueuePush(
+    userIds: string[],
+    event: PushEvent,
+    key: string,
+    data: Record<string, string> = {},
+  ) {
+    const ids = [...new Set(userIds)];
+    if (!ids.length) return;
+    await this.queue
+      .add('push', { userIds: ids, event, data }, { jobId: `push-${event}-${key}`, attempts: 3 })
+      .catch((error) => console.error('Push could not be queued', (error as Error).message));
+  }
   async onModuleInit() {
     // The API process enqueues; processing happens where RUN_JOBS is true (the worker container).
     if (!config.RUN_JOBS) return;
@@ -72,6 +90,8 @@ export class Jobs implements OnModuleInit, OnModuleDestroy {
         switch (job.name) {
           case 'sms':
             return this.sendSms(job.data.id);
+          case 'push':
+            return this.push?.send(job.data.userIds, job.data.event, job.data.data);
           case 'absence':
             return this.absence(job.data.enrollmentId, job.data.date);
           case 'notices':
@@ -169,6 +189,12 @@ export class Jobs implements OnModuleInit, OnModuleDestroy {
       })
     )
       return;
+    await this.enqueuePush(
+      s.guardians.map((g) => g.guardianUserId),
+      'attendance',
+      `${s.id}-${day}`,
+      { studentId: s.id, date: day },
+    );
     for (const g of s.guardians)
       if (g.guardian.phone) {
         await this.sms(
@@ -223,6 +249,12 @@ export class Jobs implements OnModuleInit, OnModuleDestroy {
             );
           this.realtime.user(g.guardianUserId, 'notice');
         }
+      await this.enqueuePush(
+        students.flatMap((s) => s.guardians.map((g) => g.guardianUserId)),
+        'notice',
+        n.id,
+        { noticeId: n.id },
+      );
       await this.db.notice.update({ where: { id: n.id }, data: { status: 'SENT' } });
       this.realtime.campus(n.campusId, 'notice');
     }
@@ -310,6 +342,13 @@ export class Jobs implements OnModuleInit, OnModuleDestroy {
           },
         },
       });
+      for (const invoice of invoices)
+        await this.enqueuePush(
+          invoice.student.guardians.map((g) => g.guardianUserId),
+          'fees',
+          `${invoice.id}-${day}`,
+          { studentId: invoice.studentId },
+        );
       for (const invoice of invoices)
         for (const g of invoice.student.guardians)
           if (g.guardian.phone)

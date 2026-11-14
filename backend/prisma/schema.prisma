@@ -90,6 +90,41 @@ model OneTimeCode {
   createdAt DateTime @default(now())
   @@index([contact, purpose, createdAt])
 }
+/// Mobile app sessions: one rotating refresh token per signed-in device.
+model RefreshToken {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id])
+  /// The school whose app this session belongs to; the session cannot reach another school.
+  organizationId String
+  tokenHash String @unique
+  /// Every rotation keeps the family id, so reuse of an old token revokes the whole chain.
+  familyId String
+  /// User.tokenVersion when issued; a password change or sign-out-everywhere invalidates it.
+  tokenVersion Int
+  deviceName String?
+  expiresAt DateTime
+  revokedAt DateTime?
+  replacedById String?
+  lastUsedAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  @@index([userId, revokedAt])
+  @@index([familyId])
+}
+/// Phones registered for push notifications (FCM).
+model Device {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id])
+  organizationId String
+  platform String
+  pushToken String @unique
+  appVersion String?
+  locale String?
+  lastSeenAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  @@index([userId])
+}
 model TrialClaim {
   contact String @id
   organizationId String
@@ -388,7 +423,8 @@ model AcademicSession {
 }
 model User {
   id String @id @default(cuid())
-  email String @unique
+  /// Optional: guardians and students may sign in with their phone number instead.
+  email String? @unique
   phone String?
   fullName String
   fullNameBn String?
@@ -401,6 +437,8 @@ model User {
   mfaSecret String?
   mfaEnabledAt DateTime?
   mfaRecoveryHashes String[] @default([])
+  refreshTokens RefreshToken[]
+  devices Device[]
   memberships OrganizationMember[]
   tickets SupportTicket[]
   ticketComments TicketComment[]

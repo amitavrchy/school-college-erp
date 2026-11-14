@@ -12,6 +12,10 @@ import {
   Query,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { hash } from 'bcryptjs';
+import { randomBytes } from 'node:crypto';
+import { Jobs } from '../jobs';
+import { normalizeContact } from '../auth/otp';
 import { z } from 'zod';
 import { Db } from '../db';
 import { Actor, Context, Roles, ACADEMIC, ADMISSIONS } from '../auth/access';
@@ -51,6 +55,7 @@ export class StudentsController {
     @Inject(Db) private db: Db,
     @Inject(Scope) private scope: Scope,
     @Inject(Audit) private audit: Audit,
+    @Inject(Jobs) private jobs: Jobs,
   ) {}
   @Get('students')
   async students(@Actor() c: Context, @Query() query: Record<string, string>) {
@@ -171,6 +176,86 @@ export class StudentsController {
       failed: results.filter((r) => !r.ok).length,
       results,
     };
+  }
+  /**
+   * Turns guardian mobile numbers captured at admission or import into guardian accounts for the
+   * school's app: one account per number in this school (siblings share it), linked as primary
+   * guardian, with an SMS invitation. Students who already have a guardian are skipped.
+   */
+  @Post('students/invite-guardians')
+  @Roles(...ADMISSIONS)
+  async inviteGuardians(@Actor() c: Context, @Body() body: unknown) {
+    const v = parse(
+      z.object({ sectionId: id.optional(), sendSms: z.boolean().default(true) }),
+      body,
+    );
+    if (v.sectionId) await this.scope.section(c, v.sectionId);
+    const students = await this.db.student.findMany({
+      where: {
+        campusId: c.campusId,
+        guardianPhone: { not: null },
+        guardians: { none: {} },
+        ...(v.sectionId
+          ? { enrollments: { some: { sectionId: v.sectionId, status: 'ACTIVE' } } }
+          : {}),
+      },
+      select: {
+        id: true,
+        guardianPhone: true,
+        guardianName: true,
+        fatherName: true,
+        motherName: true,
+      },
+      take: 1000,
+    });
+    const org = await this.db.organization.findUniqueOrThrow({ where: { id: c.orgId } });
+    let created = 0,
+      linked = 0;
+    const invited = new Set<string>();
+    for (const s of students) {
+      const phoneNo = normalizeContact(s.guardianPhone!);
+      const guardianId = await this.db.serial(async (tx) => {
+        let guardian = await tx.user.findFirst({
+          where: { phone: phoneNo, memberships: { some: { organizationId: c.orgId } } },
+        });
+        if (!guardian) {
+          guardian = await tx.user.create({
+            data: {
+              fullName: s.guardianName || s.fatherName || s.motherName || 'Guardian',
+              phone: phoneNo,
+              passwordHash: await hash(randomBytes(24).toString('base64url'), 12),
+              memberships: { create: { organizationId: c.orgId, role: 'MEMBER' } },
+            },
+          });
+          created++;
+        }
+        await tx.userCampusRole.createMany({
+          data: [{ userId: guardian.id, campusId: c.campusId, role: 'GUARDIAN' }],
+          skipDuplicates: true,
+        });
+        await tx.guardianStudent.create({
+          data: {
+            guardianUserId: guardian.id,
+            studentId: s.id,
+            relation: 'Guardian',
+            isPrimary: true,
+          },
+        });
+        await this.audit.log(c, 'INVITE_GUARDIAN', 'Student', s.id, undefined, tx);
+        return guardian.id;
+      });
+      linked++;
+      if (v.sendSms && !invited.has(guardianId)) {
+        invited.add(guardianId);
+        await this.jobs.sms(
+          c.campusId,
+          phoneNo,
+          `${org.name}: download the ${org.name} app from Google Play and sign in with this mobile number to see attendance, results and fees.`,
+          `guardian-invite-${guardianId}`,
+        );
+      }
+    }
+    return { students: students.length, linked, accountsCreated: created, invited: invited.size };
   }
   @Patch('students/:id')
   @Roles(...ADMISSIONS)

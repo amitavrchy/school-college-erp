@@ -5,7 +5,9 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
+import { Jobs } from '../jobs';
 import type { Prisma } from '@prisma/client';
 import { Db } from '../db';
 import type { Context } from '../auth/access';
@@ -17,6 +19,7 @@ export class PaymentService {
   constructor(
     @Inject(Db) private db: Db,
     @Inject(Realtime) private live: Realtime,
+    @Optional() @Inject(Jobs) private jobs?: Jobs,
   ) {}
   async create(
     studentId: string,
@@ -110,6 +113,12 @@ export class PaymentService {
       include: { guardians: true },
     });
     for (const g of student.guardians) this.live.user(g.guardianUserId, 'payment');
+    await this.jobs?.enqueuePush(
+      student.guardians.map((g) => g.guardianUserId),
+      'payment',
+      result.id,
+      { studentId: student.id, paymentId: result.id },
+    );
     this.live.campus(student.campusId, 'payment');
     return result;
   }

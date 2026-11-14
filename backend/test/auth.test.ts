@@ -142,3 +142,10 @@ test('TRUST_PROXY values map to what Express expects', async () => {
   assert.equal(trustProxy('1'), 1);
   assert.equal(trustProxy('10.0.0.0/8, 172.16.0.0/12'), '10.0.0.0/8, 172.16.0.0/12');
 });
+test('app version gate compares each part numerically', async () => {
+  const { versionAtLeast } = await import('../src/auth/mobile.controller');
+  assert.equal(versionAtLeast('1.10.0', '1.9.3'), true);
+  assert.equal(versionAtLeast('1.2', '1.2.0'), true);
+  assert.equal(versionAtLeast('1.2.0', '1.3.0'), false);
+  assert.equal(versionAtLeast('2.0.0', '1.99.99'), true);
+});

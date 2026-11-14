@@ -7,12 +7,13 @@ import { Realtime } from './realtime';
 import { Billing } from './modules/billing';
 import { Notifier } from './notify';
 import { Settings } from './settings';
+import { Push } from './push';
 import { config } from './config';
 /**
  * Background worker: runs BullMQ processors and schedules (notices, fines, monthly billing,
  * reminders, seat-offer expiry, SMS delivery). No HTTP server; the API only enqueues.
  */
-@Module({ providers: [Db, Jobs, Realtime, Billing, Notifier, Settings] })
+@Module({ providers: [Db, Jobs, Realtime, Billing, Notifier, Settings, Push] })
 class WorkerModule {}
 async function main() {
   if (!config.RUN_JOBS) throw new Error('The worker needs RUN_JOBS=true');

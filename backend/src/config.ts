@@ -61,6 +61,11 @@ export const configSchema = z
     FEE_REMINDERS_ENABLED: bool(false),
     SCHOOL_SITE_BASE_DOMAIN: z.string().default('localhost'),
     SCHOOL_SITE_CNAME_TARGET: optional,
+    /**
+     * Firebase Cloud Messaging service account (the JSON file, base64-encoded). One Firebase
+     * project holds every school's Android app. Empty = pushes are logged, not sent.
+     */
+    FCM_SERVICE_ACCOUNT: optional,
     /** Run BullMQ processors in this process. The API sets false when a worker container exists. */
     RUN_JOBS: bool(true),
   })

@@ -18,6 +18,7 @@ import { config } from '../config';
 import { decryptText, encryptText } from '../crypto';
 import { Actor, Context, Public, AccountAccess } from './access';
 import { contactSchema, OneTimeCodes } from './otp';
+import { MobileController } from './mobile.controller';
 import { requiresMfa, SESSION_COOKIE, startSession } from './session';
 import { hashRecovery, newSecret, otpauthUri, recoveryCodes, verifyTotp } from './totp';
 const DUMMY_HASH = '$2b$12$F1bm6P9VN1H9nQJ0J1utbu6s4H.eOVxw0QRqAwEL3qpIrR/5FyiX2';
@@ -30,6 +31,7 @@ export class AuthController {
     @Inject(Db) private db: Db,
     @Inject(JwtService) private jwt: JwtService,
     @Inject(OneTimeCodes) private codes: OneTimeCodes,
+    @Inject(MobileController) private mobile: MobileController,
   ) {}
   @Public()
   @Post('login')
@@ -93,10 +95,30 @@ export class AuthController {
   @Post('codes')
   async sendCode(@Body() body: unknown) {
     const v = parse(
-      z.object({ purpose: z.enum(['SIGNUP', 'PASSWORD_RESET']), contact: contactSchema }),
+      z.object({
+        purpose: z.enum(['SIGNUP', 'PASSWORD_RESET', 'GUARDIAN_LOGIN']),
+        contact: contactSchema,
+        school: z
+          .string()
+          .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+          .max(48)
+          .optional(),
+      }),
       body,
     );
     if (v.purpose === 'SIGNUP') return this.codes.issue('SIGNUP', v.contact);
+    if (v.purpose === 'GUARDIAN_LOGIN') {
+      if (!v.school) throw new BadRequestException('school: required for app sign-in');
+      const org = await this.db.organization.findFirst({ where: { slug: v.school } });
+      // Same response whether or not the number is known, so the app cannot list families.
+      const user = org ? await this.mobile.familyAccount(org.id, v.contact) : null;
+      return this.codes.issue(
+        'GUARDIAN_LOGIN',
+        v.contact,
+        !!user,
+        `${org?.id ?? 'none'}:${v.contact}`,
+      );
+    }
     const user = await this.findByContact(v.contact);
     return this.codes.issue('PASSWORD_RESET', v.contact, !!user);
   }
@@ -198,7 +220,10 @@ export class AuthController {
       where: { id: user.id },
       data: { mfaSecret: encryptText(secret) },
     });
-    return { secret, otpauthUrl: otpauthUri(config.MFA_ISSUER, user.email, secret) };
+    return {
+      secret,
+      otpauthUrl: otpauthUri(config.MFA_ISSUER, user.email ?? user.phone ?? user.id, secret),
+    };
   }
   /** Confirms enrolment with a code from the app and returns single-use recovery codes once. */
   @Post('mfa/enable')
