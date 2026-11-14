@@ -123,6 +123,13 @@ test('institution signup, wallet review and subscription receipt work end to end
     await page.getByLabel('Institution address name').fill(slug);
     await page.getByLabel('Your full name').fill('Browser Test Owner');
     await page.getByLabel('Your email').fill(`${slug}@example.test`);
+    // Sign-up is verified by a one-time code; with OTP_DEBUG=true the page shows the test code.
+    await page.getByRole('button', { name: 'Send code', exact: true }).click();
+    const sent = page.getByRole('status').filter({ hasText: 'Test code:' });
+    await expect(sent, 'API must run with OTP_DEBUG=true').toBeVisible();
+    const otp = (await sent.textContent())?.match(/Test code: (\d{6})/)?.[1];
+    expect(otp).toBeTruthy();
+    await page.getByLabel('Verification code').fill(otp!);
     await page.getByLabel('Create a password').fill('TenantFixture!2026');
     await page.getByRole('button', { name: 'Create my workspace' }).click();
     await expect(page.getByRole('heading', { name: 'Campus overview' })).toBeVisible();
