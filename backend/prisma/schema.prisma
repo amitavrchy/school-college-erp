@@ -8,6 +8,8 @@ model OrganizationMember {
   userId String
   user User @relation(fields: [userId], references: [id])
   role String @default("MEMBER")
+  /// Deactivation is per institution so one school cannot lock a person out of another.
+  active Boolean @default(true)
   @@unique([organizationId, userId])
 }
 model SubscriptionPlan {
@@ -74,6 +76,24 @@ model PlatformSettings {
   bankInstructions String?
   paymentInstructions String @default("Send the exact subscription amount, then submit your transaction reference. The platform team reviews every request before activation.")
   supportEmail String?
+  /// Online fee checkout stays off until the platform team has reviewed settlement (audit R-S2).
+  onlineFeesEnabled Boolean @default(false)
+}
+model OneTimeCode {
+  id String @id @default(cuid())
+  purpose String
+  contact String
+  codeHash String
+  attempts Int @default(0)
+  expiresAt DateTime
+  consumedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([contact, purpose, createdAt])
+}
+model TrialClaim {
+  contact String @id
+  organizationId String
+  createdAt DateTime @default(now())
 }
 model LibraryBook {
   id String @id @default(cuid())
@@ -350,6 +370,11 @@ model User {
   active Boolean @default(true)
   tokenVersion Int @default(0)
   platformAdmin Boolean @default(false)
+  emailVerifiedAt DateTime?
+  phoneVerifiedAt DateTime?
+  mfaSecret String?
+  mfaEnabledAt DateTime?
+  mfaRecoveryHashes String[] @default([])
   memberships OrganizationMember[]
   tickets SupportTicket[]
   ticketComments TicketComment[]

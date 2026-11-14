@@ -91,7 +91,7 @@ export class StudentsController {
       const count = await tx.enrollment.count({ where: { sectionId, status: 'ACTIVE' } });
       if (count >= section.capacity)
         throw new (await import('@nestjs/common')).ConflictException('Section is full');
-      return tx.student.create({
+      const created = await tx.student.create({
         data: {
           ...data,
           campusId: c.campusId,
@@ -100,8 +100,9 @@ export class StudentsController {
           },
         },
       });
+      await this.audit.log(c, 'CREATE', 'Student', created.id, undefined, tx);
+      return created;
     });
-    await this.audit.log(c, 'CREATE', 'Student', student.id);
     return student;
   }
   @Post('students/:id/guardians')

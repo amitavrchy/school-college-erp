@@ -8,38 +8,21 @@ import {
   Post,
   Query,
   Res,
-  UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:crypto';
+import { decrypt, encrypt } from '../crypto';
+import { signCapability, verifyCapability } from '../auth/capability';
 import type { Response } from 'express';
 import { z } from 'zod';
 import { Db } from '../db';
 import { Actor, ADMISSIONS, Context, Public, Roles } from '../auth/access';
 import { parse } from '../common';
-import { config } from '../config';
 @Controller('admissions')
 export class UploadsController {
   constructor(
     @Inject(Db) private db: Db,
     @Inject(JwtService) private jwt: JwtService,
   ) {}
-  private key() {
-    if (process.env.DOCUMENT_ENCRYPTION_KEY) {
-      if (!/^[a-fA-F0-9]{64}$/.test(process.env.DOCUMENT_ENCRYPTION_KEY))
-        throw new Error('DOCUMENT_ENCRYPTION_KEY must be 64 hex characters');
-      return Buffer.from(process.env.DOCUMENT_ENCRYPTION_KEY, 'hex');
-    }
-    return scryptSync(config.JWT_ACCESS_SECRET, 'campus-one-documents-v1', 32);
-  }
-  private async claims(token: string, purpose: string, subject: string) {
-    try {
-      const c = await this.jwt.verifyAsync(token);
-      if (c.purpose !== purpose || c.sub !== subject) throw new Error();
-    } catch {
-      throw new UnauthorizedException('This document link has expired or is invalid');
-    }
-  }
   @Public()
   @Post('applications/:id/documents')
   async upload(@Param('id') applicationId: string, @Body() body: unknown) {
@@ -55,7 +38,7 @@ export class UploadsController {
       }),
       body,
     );
-    await this.claims(v.token, 'ADMISSION_UPLOAD', applicationId);
+    await verifyCapability(this.jwt, v.token, 'ADMISSION_UPLOAD', applicationId);
     const application = await this.db.admissionApplication.findFirstOrThrow({
       where: {
         id: applicationId,
@@ -76,9 +59,7 @@ export class UploadsController {
           ? bytes.subarray(0, 8).toString('hex') === '89504e470d0a1a0a'
           : bytes.subarray(0, 3).toString('hex') === 'ffd8ff';
     if (!valid) throw new BadRequestException('The file does not match its declared document type');
-    const nonce = randomBytes(12),
-      cipher = createCipheriv('aes-256-gcm', this.key(), nonce);
-    const encrypted = Buffer.concat([cipher.update(bytes), cipher.final()]);
+    const encryptedData = encrypt(bytes);
     const document = await this.db.serial(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "AdmissionApplication" WHERE id = ${applicationId} FOR UPDATE`;
       if ((await tx.admissionDocument.count({ where: { applicationId } })) >= 5)
@@ -89,7 +70,7 @@ export class UploadsController {
           fileName: v.fileName.replace(/[^a-zA-Z0-9._ -]/g, '_'),
           mimeType: v.mimeType,
           size: bytes.length,
-          encryptedData: Buffer.concat([nonce, cipher.getAuthTag(), encrypted]),
+          encryptedData,
         },
         select: { id: true, fileName: true, size: true },
       });
@@ -109,7 +90,7 @@ export class UploadsController {
     return Promise.all(
       documents.map(async (d) => ({
         ...d,
-        url: `/api/admissions/documents/${d.id}/download?token=${await this.jwt.signAsync({ sub: d.id, purpose: 'DOCUMENT_DOWNLOAD' }, { expiresIn: '5m' })}`,
+        url: `/api/admissions/documents/${d.id}/download?token=${await signCapability(this.jwt, d.id, 'DOCUMENT_DOWNLOAD', '5m')}`,
       })),
     );
   }
@@ -120,12 +101,9 @@ export class UploadsController {
     @Query('token') token: string,
     @Res() res: Response,
   ) {
-    await this.claims(token, 'DOCUMENT_DOWNLOAD', documentId);
+    await verifyCapability(this.jwt, token, 'DOCUMENT_DOWNLOAD', documentId);
     const d = await this.db.admissionDocument.findUniqueOrThrow({ where: { id: documentId } });
-    const data = Buffer.from(d.encryptedData),
-      decipher = createDecipheriv('aes-256-gcm', this.key(), data.subarray(0, 12));
-    decipher.setAuthTag(data.subarray(12, 28));
-    const bytes = Buffer.concat([decipher.update(data.subarray(28)), decipher.final()]);
+    const bytes = decrypt(Buffer.from(d.encryptedData));
     res.setHeader('Content-Type', d.mimeType);
     res.setHeader(
       'Content-Disposition',

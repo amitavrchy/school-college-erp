@@ -306,7 +306,13 @@ test(
       async (scenario) => {
         const { Jobs } = await import('../src/jobs');
         const { Billing } = await import('../src/modules/billing');
-        const jobs = new Jobs(db as any, { user() {}, campus() {} } as any, new Billing(db as any));
+        const { Notifier } = await import('../src/notify');
+        const jobs = new Jobs(
+          db as any,
+          { user() {}, campus() {} } as any,
+          new Billing(db as any),
+          new Notifier(),
+        );
         scenario.after(() => jobs.onModuleDestroy());
         const enrollmentId = students[0].enrollments[0].id;
         await db.attendanceRecord.create({

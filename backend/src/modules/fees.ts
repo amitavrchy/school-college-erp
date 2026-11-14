@@ -110,8 +110,12 @@ export class FeesController {
     const head = invoice.lines.find((l) => l.feeHeadName === v.feeHeadName);
     if (!head || v.amountMinor > head.amountMinor || v.amountMinor > outstanding(invoice))
       throw new BadRequestException('Waiver exceeds the selected fee head or outstanding balance');
-    return this.db.waiver.create({
-      data: { ...v, studentId: invoice.studentId, requestedBy: c.userId },
+    return this.db.$transaction(async (tx) => {
+      const waiver = await tx.waiver.create({
+        data: { ...v, studentId: invoice.studentId, requestedBy: c.userId },
+      });
+      await this.audit.log(c, 'REQUEST', 'Waiver', waiver.id, { amountMinor: v.amountMinor }, tx);
+      return waiver;
     });
   }
   @Post('waivers/:id/approve')
@@ -154,15 +158,14 @@ export class FeesController {
         where: { id: waiverId },
         data: { status: 'APPROVED', approvedBy: c.userId },
       });
-      await tx.auditLog.create({
-        data: {
-          actorId: c.userId,
-          campusId: c.campusId,
-          action: 'APPROVE',
-          entity: 'Waiver',
-          entityId: waiverId,
-        },
-      });
+      await this.audit.log(
+        c,
+        'APPROVE',
+        'Waiver',
+        waiverId,
+        { amountMinor: waiver.amountMinor },
+        tx,
+      );
       return result;
     });
   }

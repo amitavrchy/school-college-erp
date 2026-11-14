@@ -1,3 +1,4 @@
+import { config } from '../config';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { Db } from '../db';
 @Injectable()
@@ -30,7 +31,7 @@ export class Billing {
     let generated = 0;
     for (const e of enrollments) {
       let discountBps = 0;
-      const configured = Number(process.env.SIBLING_DISCOUNT_BPS || 0);
+      const configured = config.SIBLING_DISCOUNT_BPS;
       if (configured > 0 && configured <= 10000 && e.student.guardians.length) {
         const siblings = await this.db.student.count({
           where: {

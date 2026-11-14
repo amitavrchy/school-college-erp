@@ -81,7 +81,15 @@ export async function removeTestTenant(db: PrismaClient, organizationId: string)
       await tx.subscriptionEvent.deleteMany({ where: { organizationId } });
       await tx.subscription.deleteMany({ where: { organizationId } });
       await tx.organizationMember.deleteMany({ where: { organizationId } });
+      await tx.trialClaim.deleteMany({ where: { organizationId } });
       await tx.organization.delete({ where: { id: organizationId } });
+      const users = await tx.user.findMany({
+        where: { id: { in: members.map((m) => m.userId) }, memberships: { none: {} } },
+        select: { email: true, phone: true },
+      });
+      await tx.oneTimeCode.deleteMany({
+        where: { contact: { in: users.flatMap((u) => [u.email, u.phone || '']) } },
+      });
       await tx.user.deleteMany({
         where: {
           id: { in: members.map((m) => m.userId) },

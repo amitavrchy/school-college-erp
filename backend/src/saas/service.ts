@@ -12,9 +12,13 @@ import { Db } from '../db';
 import type { Context } from '../auth/access';
 import { extendPeriod } from './policy';
 import { NCTB } from '../domain/grading';
+import { OneTimeCodes } from '../auth/otp';
 @Injectable()
 export class Saas {
-  constructor(@Inject(Db) private db: Db) {}
+  constructor(
+    @Inject(Db) private db: Db,
+    @Inject(OneTimeCodes) private codes: OneTimeCodes,
+  ) {}
   async owner(ctx: Context) {
     const member = await this.db.organizationMember.findUnique({
       where: { organizationId_userId: { organizationId: ctx.orgId, userId: ctx.userId } },
@@ -34,7 +38,10 @@ export class Saas {
       period?: string;
       fullName?: string;
       email?: string;
+      phone?: string;
       password?: string;
+      /** Contact proven by a one-time code; required for self-service sign-up. */
+      verification?: { contact: string; code: string };
     },
     existingUserId?: string,
   ) {
@@ -43,10 +50,45 @@ export class Saas {
       const plan = await tx.subscriptionPlan.findFirstOrThrow({
         where: { code: input.planCode, active: true },
       });
+      let trial = true;
+      if (!existingUserId) {
+        const contact = input.verification?.contact;
+        if (!contact) throw new BadRequestException('Verify your email or mobile number first');
+        await this.codes.consume(tx, 'SIGNUP', contact, input.verification!.code);
+        const claimed = await tx.trialClaim.findFirst({
+          where: {
+            contact: { in: [contact, input.email!, input.phone].filter(Boolean) as string[] },
+          },
+        });
+        if (claimed)
+          throw new ConflictException(
+            'A free trial has already been used with this email or mobile number. Sign in to your existing account or contact support.',
+          );
+      } else {
+        // An owner whose earlier institution never became a paying customer must ask the platform
+        // team instead of starting trial after trial.
+        const unpaid = await tx.organization.count({
+          where: {
+            members: { some: { userId: existingUserId, role: 'OWNER' } },
+            subscription: { status: { not: 'ACTIVE' } },
+            subscriptionPayments: { none: { status: 'APPROVED' } },
+          },
+        });
+        trial = unpaid === 0;
+      }
+      const verifiedAt = new Date();
       const user = existingUserId
         ? await tx.user.findUniqueOrThrow({ where: { id: existingUserId } })
         : await tx.user.create({
-            data: { fullName: input.fullName!, email: input.email!, passwordHash: passwordHash! },
+            data: {
+              fullName: input.fullName!,
+              email: input.email!,
+              phone: input.phone,
+              passwordHash: passwordHash!,
+              ...(input.verification!.contact.includes('@')
+                ? { emailVerifiedAt: verifiedAt }
+                : { phoneVerifiedAt: verifiedAt }),
+            },
           });
       const org = await tx.organization.create({
         data: {
@@ -57,12 +99,21 @@ export class Saas {
             create: {
               planId: plan.id,
               period: input.period || 'MONTHLY',
-              status: 'TRIAL',
-              currentPeriodEnd: new Date(Date.now() + 14 * 86400000),
+              status: trial ? 'TRIAL' : 'PENDING_APPROVAL',
+              currentPeriodEnd: trial ? new Date(Date.now() + 14 * 86400000) : new Date(),
             },
           },
         },
       });
+      if (!existingUserId)
+        await tx.trialClaim.createMany({
+          data: [
+            ...new Set(
+              [input.verification!.contact, input.email!, input.phone].filter(Boolean) as string[],
+            ),
+          ].map((contact) => ({ contact, organizationId: org.id })),
+          skipDuplicates: true,
+        });
       const campus = await tx.campus.create({
         data: {
           orgId: org.id,
@@ -90,11 +141,11 @@ export class Saas {
         data: {
           organizationId: org.id,
           actorId: user.id,
-          action: 'TRIAL_STARTED',
-          meta: { planCode: plan.code, days: 14 },
+          action: trial ? 'TRIAL_STARTED' : 'APPROVAL_REQUIRED',
+          meta: trial ? { planCode: plan.code, days: 14 } : { planCode: plan.code },
         },
       });
-      return { user, organization: org, campus, session };
+      return { user, organization: org, campus, session, approvalRequired: !trial };
     });
   }
   usage(organizationId: string) {

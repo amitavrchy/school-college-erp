@@ -4,6 +4,8 @@ import { JwtModule } from '@nestjs/jwt';
 import { config } from './config';
 import { Db } from './db';
 import { Audit } from './audit';
+import { Notifier } from './notify';
+import { OneTimeCodes } from './auth/otp';
 import { Jobs } from './jobs';
 import { Realtime } from './realtime';
 import { AccessGuard } from './auth/access';
@@ -76,6 +78,8 @@ import { WebsiteController, PublicWebsitesController } from './websites/controll
     WebsiteResults,
     Saas,
     Audit,
+    Notifier,
+    OneTimeCodes,
     Scope,
     Realtime,
     Jobs,

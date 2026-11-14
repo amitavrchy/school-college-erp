@@ -12,6 +12,8 @@ import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { Db } from '../db';
 import { requireSubscription } from '../saas/policy';
+import { config } from '../config';
+import { requiresMfa } from './session';
 export const ROLES = [
   'SUPER_ADMIN',
   'CAMPUS_ADMIN',
@@ -79,6 +81,10 @@ export class AccessGuard implements CanActivate {
     const platform = this.reflector.getAllAndOverride<boolean>('platformOnly', targets);
     const account = this.reflector.getAllAndOverride<boolean>('accountAccess', targets);
     const billing = this.reflector.getAllAndOverride<boolean>('billingAccess', targets);
+    if (config.MFA_ENFORCE && !account && !user.mfaEnabledAt && requiresMfa(user))
+      throw new ForbiddenException(
+        'Set up two-step sign-in from your account settings before continuing',
+      );
     if (platform) {
       if (!user.platformAdmin)
         throw new ForbiddenException('Platform administrator access is required');
@@ -99,9 +105,11 @@ export class AccessGuard implements CanActivate {
     const orgId = user.roles.find((r) => r.campusId === campusId)?.campus.orgId || '';
     if (
       !account &&
-      !(await this.db.organizationMember.findUnique({
-        where: { organizationId_userId: { organizationId: orgId, userId: user.id } },
-      }))
+      !(
+        await this.db.organizationMember.findUnique({
+          where: { organizationId_userId: { organizationId: orgId, userId: user.id } },
+        })
+      )?.active
     )
       throw new ForbiddenException('You are not a member of this institution');
     const required = this.reflector.getAllAndOverride<Role[]>('roles', [

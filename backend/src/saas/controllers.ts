@@ -8,6 +8,7 @@ import {
   Post,
   Res,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import type { Response } from 'express';
@@ -18,6 +19,8 @@ import { Actor, Context, Public, PlatformOnly, BillingAccess, AccountAccess } fr
 import { id, parse, phone } from '../common';
 import { config } from '../config';
 import { Saas } from './service';
+import { normalizeContact } from '../auth/otp';
+import { startSession } from '../auth/session';
 const institution = z.object({
   organizationName: z.string().min(3).max(120),
   slug: z
@@ -52,28 +55,32 @@ export class SaasController {
       institution.extend({
         fullName: z.string().min(2).max(100),
         email: z.email().transform((v) => v.toLowerCase()),
+        phone: phone.transform((p) => normalizeContact(p)).optional(),
         password: z.string().min(12).max(100),
+        verifyBy: z.enum(['EMAIL', 'PHONE']).default('EMAIL'),
+        code: z.string().min(4).max(10),
       }),
       body,
     );
-    const result = await this.saas.onboard(v);
-    const token = await this.jwt.signAsync({ sub: result.user.id, v: result.user.tokenVersion });
-    res.cookie('campus_session', token, {
-      httpOnly: true,
-      secure:
-        process.env.COOKIE_SECURE === 'true' ||
-        (config.NODE_ENV === 'production' && process.env.COOKIE_SECURE !== 'false'),
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 8 * 3600_000,
+    if (v.verifyBy === 'PHONE' && !v.phone)
+      throw new BadRequestException('Enter the mobile number you verified');
+    const { code, verifyBy, ...input } = v;
+    const result = await this.saas.onboard({
+      ...input,
+      verification: { contact: verifyBy === 'PHONE' ? v.phone! : v.email, code },
     });
+    await startSession(this.jwt, res, result.user);
     return { organization: result.organization, campus: result.campus, session: result.session };
   }
   @Post('organizations')
   @AccountAccess()
   async create(@Actor() c: Context, @Body() body: unknown) {
     const result = await this.saas.onboard(parse(institution, body), c.userId);
-    return { organization: result.organization, campus: result.campus };
+    return {
+      organization: result.organization,
+      campus: result.campus,
+      approvalRequired: result.approvalRequired,
+    };
   }
   @Get('me')
   summary(@Actor() c: Context) {
@@ -297,9 +304,13 @@ export class PlatformController {
         bankInstructions: z.string().max(2000).optional(),
         paymentInstructions: z.string().min(10).max(2000),
         supportEmail: z.email().optional(),
+        /** Turning this on exposes online fee checkout for every school (platform settlement). */
+        onlineFeesEnabled: z.boolean().optional(),
       }),
       body,
     );
+    if (v.onlineFeesEnabled && config.PAYMENT_MODE !== 'sslcommerz')
+      throw new BadRequestException('Set PAYMENT_MODE=sslcommerz with gateway credentials first');
     return this.db.$transaction(async (tx) => {
       const settings = await tx.platformSettings.upsert({
         where: { id: 'platform' },

@@ -25,8 +25,13 @@ test('school CMS publishes a branded website, serves subdomains and exposes only
   const db = new PrismaClient({ datasourceUrl: url }),
     slug = 'test-web-' + randomUUID().slice(0, 8);
   try {
+    const code = await page.request.post('/api/auth/codes', {
+      data: { purpose: 'SIGNUP', contact: slug + '@example.test' },
+    });
+    expect(code.status(), 'API must run with OTP_DEBUG=true').toBe(201);
     const registered = await page.request.post('/api/saas/register', {
       data: {
+        code: (await code.json()).debugCode,
         organizationName: 'Website Browser Academy',
         slug,
         campusName: 'Main campus',

@@ -43,7 +43,13 @@ test(
     }
     async function institution(label: string) {
       const slug = 'test-cms-' + label + '-' + randomUUID().slice(0, 8);
+      const code = await request('auth/codes', {
+        purpose: 'SIGNUP',
+        contact: slug + '@example.test',
+      });
+      assert.equal(code.status, 201, 'API must run with OTP_DEBUG=true for integration tests');
       const r = await request('saas/register', {
+        code: code.data.debugCode,
         organizationName: 'CMS ' + label + ' Academy',
         slug,
         campusName: 'Main campus',

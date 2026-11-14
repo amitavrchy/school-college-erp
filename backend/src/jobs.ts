@@ -9,6 +9,7 @@ import { HttpException, ServiceUnavailableException } from '@nestjs/common';
 import { lateFine } from './domain/fees';
 import { Realtime } from './realtime';
 import { Billing } from './modules/billing';
+import { Notifier } from './notify';
 @Injectable()
 export class Jobs implements OnModuleInit, OnModuleDestroy {
   private connection = new IORedis(config.REDIS_URL, { maxRetriesPerRequest: null });
@@ -58,6 +59,7 @@ export class Jobs implements OnModuleInit, OnModuleDestroy {
     @Inject(Db) private db: Db,
     @Inject(Realtime) private realtime: Realtime,
     @Inject(Billing) private billing: Billing,
+    @Inject(Notifier) private notifier: Notifier,
   ) {}
   async onModuleInit() {
     this.worker = new Worker(
@@ -103,35 +105,13 @@ export class Jobs implements OnModuleInit, OnModuleDestroy {
     const message = await this.db.smsMessage.findUniqueOrThrow({ where: { id } });
     if (['SENT', 'SIMULATED', 'DELIVERED'].includes(message.status)) return;
     try {
-      if (config.SMS_PROVIDER === 'console') {
-        await this.db.smsMessage.update({
-          where: { id },
-          data: { status: 'SIMULATED', providerRef: `console-${id}` },
-        });
-        return;
-      }
-      if (!process.env.SMS_API_URL || !process.env.SMS_API_KEY)
-        throw new Error('SMS gateway is not configured');
-      const response = await fetch(process.env.SMS_API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${process.env.SMS_API_KEY}`,
-          'Idempotency-Key': message.dedupeKey,
-        },
-        body: JSON.stringify({
-          to: message.toPhone,
-          body: message.body,
-          sender: process.env.SMS_SENDER_ID,
-        }),
-        signal: AbortSignal.timeout(15000),
-      });
-      if (!response.ok) throw new Error(`SMS provider returned ${response.status}`);
-      const result = (await response.json()) as { id: string };
-      if (!result.id) throw new Error('SMS response missing message ID');
+      const result = await this.notifier.sms(message.toPhone, message.body, message.dedupeKey);
       await this.db.smsMessage.update({
         where: { id },
-        data: { status: 'SENT', providerRef: result.id },
+        data:
+          result.provider === 'console'
+            ? { status: 'SIMULATED', providerRef: `console-${id}` }
+            : { status: 'SENT', providerRef: result.id },
       });
     } catch (error) {
       await this.db.smsMessage.update({ where: { id }, data: { status: 'FAILED' } });
@@ -214,12 +194,7 @@ export class Jobs implements OnModuleInit, OnModuleDestroy {
       where: { status: { in: ['DUE', 'PARTIAL'] }, session: { status: { not: 'CLOSED' } } },
     });
     for (const invoice of invoices) {
-      const fineMinor = lateFine(
-        invoice.dueDate,
-        now,
-        Number(process.env.FEE_FINE_PER_DAY_MINOR || 1000),
-        50000,
-      );
+      const fineMinor = lateFine(invoice.dueDate, now, config.FEE_FINE_PER_DAY_MINOR, 50000);
       if (fineMinor > invoice.fineMinor)
         await this.db.invoice.updateMany({
           where: {
@@ -244,7 +219,7 @@ export class Jobs implements OnModuleInit, OnModuleDestroy {
           new Date(`${day.slice(0, 7)}-10`),
         );
     }
-    if (process.env.FEE_REMINDERS_ENABLED === 'true') {
+    if (config.FEE_REMINDERS_ENABLED) {
       const dueDays = [day, new Date(Date.parse(day) + 3 * 86400000).toISOString().slice(0, 10)];
       for (const invoice of invoices.filter((i) =>
         dueDays.includes(i.dueDate.toISOString().slice(0, 10)),
