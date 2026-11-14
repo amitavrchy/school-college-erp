@@ -393,6 +393,14 @@ export default function Shell({ children }: { children: ReactNode }) {
                   )}
                 </div>
               )}
+            {user.mfaSetupRequired && (
+              <div className="info-banner mfa-banner">
+                Administrators must protect their account with two-step sign-in.{' '}
+                <Link href="/settings" className="text-green">
+                  Set it up in Settings → Account →
+                </Link>
+              </div>
+            )}
             {error && <div className="error-banner">{error}</div>}
             {children}
             <footer className="app-footer">

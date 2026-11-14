@@ -2,9 +2,32 @@
 import { useState } from 'react';
 import { Building2, CalendarDays, LockKeyhole, Plus, ShieldCheck, Users } from 'lucide-react';
 import { useCampus } from '@/components/shell';
-import { Badge, Button, Field, FormModal, PageTitle, Panel, State, Toast } from '@/components/ui';
+import {
+  Badge,
+  Button,
+  Field,
+  FormModal,
+  Modal,
+  PageTitle,
+  Panel,
+  State,
+  Toast,
+} from '@/components/ui';
 import { useData } from '@/lib/use-data';
-import { displayDate, post } from '@/lib/api';
+import { ApiError, displayDate, post } from '@/lib/api';
+const ROLE_OPTIONS = [
+  'SUPER_ADMIN',
+  'CAMPUS_ADMIN',
+  'PRINCIPAL',
+  'ACCOUNTS',
+  'TEACHER',
+  'CLASS_TEACHER',
+  'ADMISSION_OFFICER',
+  'LIBRARIAN',
+  'TRANSPORT_MANAGER',
+  'GUARDIAN',
+  'STUDENT',
+];
 export default function Settings() {
   const { can, campus, user } = useCampus(),
     admin = can('SUPER_ADMIN', 'CAMPUS_ADMIN'),
@@ -14,28 +37,28 @@ export default function Settings() {
     { data: holidays, reload: reloadHolidays } = useData('holidays');
   const [tab, setTab] = useState('Campus'),
     [modal, setModal] = useState(''),
-    [toast, setToast] = useState('');
+    [toast, setToast] = useState(''),
+    [selected, setSelected] = useState<any>(null),
+    [secret, setSecret] = useState<{ secret: string; otpauthUrl: string } | null>(null),
+    [recovery, setRecovery] = useState<string[] | null>(null),
+    [temporary, setTemporary] = useState('');
+  const superAdmin = can('SUPER_ADMIN');
+  const grantable = ROLE_OPTIONS.filter((r) => superAdmin || r !== 'SUPER_ADMIN');
   const fields: Record<string, Field[]> = {
     user: [
       { key: 'fullName', label: 'Full name' },
       { key: 'email', label: 'Email', type: 'email' },
       { key: 'phone', label: 'Mobile number', required: false },
-      { key: 'password', label: 'Initial password (at least 12 characters)', type: 'password' },
+      {
+        key: 'password',
+        label: 'Initial password (at least 12 characters; not needed for an existing account)',
+        type: 'password',
+        required: false,
+      },
       {
         key: 'role',
         label: 'Campus role',
-        options: [
-          'CAMPUS_ADMIN',
-          'PRINCIPAL',
-          'ACCOUNTS',
-          'TEACHER',
-          'CLASS_TEACHER',
-          'ADMISSION_OFFICER',
-          'LIBRARIAN',
-          'TRANSPORT_MANAGER',
-          'GUARDIAN',
-          'STUDENT',
-        ].map((r) => ({ value: r, label: r.replaceAll('_', ' ') })),
+        options: grantable.map((r) => ({ value: r, label: r.replaceAll('_', ' ') })),
       },
     ],
     campus: [
@@ -66,6 +89,24 @@ export default function Settings() {
     ],
   };
   async function submit(v: Record<string, any>) {
+    if (modal === 'user') {
+      try {
+        const created = await post('users', v);
+        await reload();
+        setToast(created.attached ? 'Existing account added to this campus' : 'User added');
+      } catch (e) {
+        if (!(e instanceof ApiError && e.status === 409 && /already exists/.test(e.message)))
+          throw e;
+        if (
+          !window.confirm(`${e.message}\n\nAdd this person to your campus with the selected role?`)
+        )
+          return;
+        await post('users', { ...v, attachExisting: true });
+        await reload();
+        setToast('Existing account added to this campus');
+      }
+      return;
+    }
     await post(
       (
         {
@@ -198,6 +239,7 @@ export default function Settings() {
                   <th>Email</th>
                   <th>Role</th>
                   <th>Status</th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
@@ -210,6 +252,58 @@ export default function Settings() {
                     <td>{u.roles.map((r: any) => r.role.replaceAll('_', ' ')).join(', ')}</td>
                     <td>
                       <Badge>{u.active ? 'Active' : 'Inactive'}</Badge>
+                    </td>
+                    <td className="row-actions">
+                      {u.id !== user.id && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            onClick={() => {
+                              setSelected(u);
+                              setModal('roles');
+                            }}
+                          >
+                            Change role
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            onClick={async () => {
+                              const verb = u.active ? 'Deactivate' : 'Reactivate';
+                              if (!window.confirm(`${verb} ${u.fullName}?`)) return;
+                              try {
+                                await post(`users/${u.id}`, { active: !u.active }, 'PATCH');
+                                await reload();
+                                setToast(
+                                  `${u.fullName} ${u.active ? 'deactivated' : 'reactivated'}`,
+                                );
+                              } catch (e) {
+                                setToast((e as Error).message);
+                              }
+                            }}
+                          >
+                            {u.active ? 'Deactivate' : 'Reactivate'}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            onClick={async () => {
+                              if (
+                                !window.confirm(
+                                  `Create a temporary password for ${u.fullName}? Their current sessions end.`,
+                                )
+                              )
+                                return;
+                              try {
+                                const r = await post(`users/${u.id}/reset-password`, {});
+                                setTemporary(`${u.fullName}: ${r.temporaryPassword}`);
+                              } catch (e) {
+                                setToast((e as Error).message);
+                              }
+                            }}
+                          >
+                            Reset password
+                          </Button>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -254,10 +348,118 @@ export default function Settings() {
               <LockKeyhole size={16} />
               Update password
             </Button>
+            <h2 style={{ marginTop: 32 }}>Two-step sign-in</h2>
+            {user.mfaEnabled ? (
+              <>
+                <p>
+                  <Badge>On</Badge> Sign-in asks for a code from your authenticator app.
+                </p>
+                <Button
+                  variant="secondary"
+                  style={{ marginTop: 12 }}
+                  onClick={() => setModal('mfa-off')}
+                >
+                  Turn off two-step sign-in
+                </Button>
+              </>
+            ) : (
+              <>
+                <p>
+                  Protect your account with a code from an authenticator app (Google Authenticator,
+                  Microsoft Authenticator, 1Password and others).
+                  {user.mfaSetupRequired && ' Administrators of an institution must turn this on.'}
+                </p>
+                <Button
+                  style={{ marginTop: 12 }}
+                  onClick={async () => {
+                    try {
+                      setSecret(await post('auth/mfa/setup', {}));
+                      setModal('mfa-on');
+                    } catch (e) {
+                      setToast((e as Error).message);
+                    }
+                  }}
+                >
+                  <ShieldCheck size={16} />
+                  Set up two-step sign-in
+                </Button>
+              </>
+            )}
           </div>
         )}
       </Panel>
-      {modal.startsWith('activate:') ? (
+      {temporary && (
+        <Modal title="Temporary password" onClose={() => setTemporary('')}>
+          <p>Give this password to the person privately. They should change it after signing in.</p>
+          <p className="recovery-codes" style={{ gridTemplateColumns: '1fr' }}>
+            {temporary}
+          </p>
+        </Modal>
+      )}
+      {recovery && (
+        <Modal title="Save your recovery codes" onClose={() => window.location.reload()}>
+          <p>
+            Each code works once if you lose your phone. Store them somewhere safe — they will not
+            be shown again.
+          </p>
+          <div className="recovery-codes">
+            {recovery.map((c) => (
+              <span key={c}>{c}</span>
+            ))}
+          </div>
+        </Modal>
+      )}
+      {modal === 'roles' && selected ? (
+        <FormModal
+          title={`Change role for ${selected.fullName}`}
+          submitLabel="Save role"
+          onClose={() => setModal('')}
+          fields={[
+            {
+              key: 'role',
+              label: 'Campus role',
+              defaultValue: selected.roles[0]?.role,
+              options: grantable.map((r) => ({ value: r, label: r.replaceAll('_', ' ') })),
+            },
+          ]}
+          onSubmit={async (v) => {
+            await post(`users/${selected.id}`, { roles: [v.role] }, 'PATCH');
+            await reload();
+            setToast('Role updated');
+          }}
+        />
+      ) : modal === 'mfa-on' && secret ? (
+        <FormModal
+          title="Set up two-step sign-in"
+          submitLabel="Turn on"
+          onClose={() => setModal('')}
+          fields={[
+            {
+              key: 'code',
+              label: `In your authenticator app, add an account with this key: ${secret.secret} — then enter the 6-digit code it shows`,
+              placeholder: '123456',
+            },
+          ]}
+          onSubmit={async (v) => {
+            const r = await post('auth/mfa/enable', { code: String(v.code).trim() });
+            setRecovery(r.recoveryCodes);
+          }}
+        />
+      ) : modal === 'mfa-off' ? (
+        <FormModal
+          title="Turn off two-step sign-in"
+          submitLabel="Turn off"
+          onClose={() => setModal('')}
+          fields={[
+            { key: 'password', label: 'Your password', type: 'password' },
+            { key: 'code', label: 'Authentication or recovery code' },
+          ]}
+          onSubmit={async (v) => {
+            await post('auth/mfa/disable', v);
+            window.location.assign('/login');
+          }}
+        />
+      ) : modal.startsWith('activate:') ? (
         <FormModal
           title="Activate academic session"
           submitLabel="Activate session"
