@@ -34,6 +34,31 @@ jobs:
       - run: npm --prefix backend audit --audit-level=high
       - run: npm --prefix frontend audit --audit-level=high
 
+  mobile:
+    name: Flutter app (analyze, test, debug build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.8
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+      - run: flutter build apk --debug --dart-define-from-file=schools/demo.json -PappId=com.campusone.scholars -PappName="Scholars Academy"
+
   integration:
     name: Integration and browser tests (Postgres + Redis)
     needs: static

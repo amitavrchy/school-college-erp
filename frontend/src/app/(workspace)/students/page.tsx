@@ -66,6 +66,32 @@ export default function Students() {
           Export page
         </Button>
         {manage && (
+          <Button
+            variant="secondary"
+            onClick={async () => {
+              if (
+                !window.confirm(
+                  'Create app accounts for guardians whose mobile number is on the student profile, and send each an SMS invitation?',
+                )
+              )
+                return;
+              try {
+                const r = await post(
+                  'students/invite-guardians',
+                  section ? { sectionId: section } : {},
+                );
+                setToast(
+                  `${r.linked} students linked to guardians · ${r.accountsCreated} new accounts · ${r.invited} SMS invitations`,
+                );
+              } catch (e) {
+                setToast((e as Error).message);
+              }
+            }}
+          >
+            Invite guardians
+          </Button>
+        )}
+        {manage && (
           <Button variant="secondary" onClick={() => setImporting(true)}>
             <Upload size={16} />
             Import

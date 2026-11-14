@@ -1,0 +1,118 @@
+{
+  "@@locale": "en",
+  "chooseLanguage": "Choose your language",
+  "continueLabel": "Continue",
+  "signInTitle": "Sign in",
+  "signInSubtitle": "Use the mobile number the school has for you.",
+  "mobileNumber": "Mobile number",
+  "sendCode": "Send code",
+  "codeSentTo": "We sent a 6-digit code to {phone}.",
+  "@codeSentTo": {
+    "placeholders": {
+      "phone": {
+        "type": "String"
+      }
+    }
+  },
+  "enterCode": "6-digit code",
+  "verify": "Verify and sign in",
+  "changeNumber": "Change number",
+  "staffSignIn": "Staff sign-in with email",
+  "familySignIn": "Guardian sign-in with mobile",
+  "email": "Email",
+  "password": "Password",
+  "signIn": "Sign in",
+  "authCode": "Authentication code",
+  "home": "Home",
+  "attendance": "Attendance",
+  "results": "Results",
+  "fees": "Fees",
+  "notices": "Notices",
+  "profile": "Profile",
+  "today": "Today",
+  "present": "Present",
+  "absent": "Absent",
+  "late": "Late",
+  "leave": "Leave",
+  "notMarked": "Not marked yet",
+  "totalDue": "Total due",
+  "nothingDue": "No dues",
+  "nextDue": "Next due {date}",
+  "@nextDue": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "attendanceRate": "{percent}% present (last {days} school days)",
+  "@attendanceRate": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      },
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "noResults": "No published results yet",
+  "gpa": "GPA",
+  "reportCard": "Report card",
+  "invoices": "Invoices",
+  "payments": "Payments",
+  "receipt": "Receipt",
+  "paid": "Paid",
+  "due": "Due",
+  "partial": "Partly paid",
+  "waived": "Waived",
+  "voided": "Voided",
+  "noNotices": "No notices yet",
+  "language": "Language",
+  "signOut": "Sign out",
+  "signOutConfirm": "Sign out of this phone?",
+  "offline": "Offline · showing what was saved at {time}",
+  "@offline": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "retry": "Try again",
+  "somethingWrong": "Something went wrong",
+  "updateRequired": "Please update the app to continue.",
+  "schoolInactive": "The school's subscription is not active. Please contact the school office.",
+  "children": "Children",
+  "classSection": "Class {name}, section {section}",
+  "@classSection": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "section": {
+        "type": "String"
+      }
+    }
+  },
+  "roll": "Roll {roll}",
+  "@roll": {
+    "placeholders": {
+      "roll": {
+        "type": "String"
+      }
+    }
+  },
+  "noChildren": "No students are linked to your account yet. Please contact the school office.",
+  "contactSchool": "Contact school",
+  "appVersion": "App version {version}",
+  "@appVersion": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "devices": "Signed-in phones",
+  "staffNotYet": "Staff features are coming in the next release. Please use the web app for now."
+}

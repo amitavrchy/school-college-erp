@@ -48,7 +48,12 @@ export default function Settings() {
   const fields: Record<string, Field[]> = {
     user: [
       { key: 'fullName', label: 'Full name' },
-      { key: 'email', label: 'Email', type: 'email' },
+      {
+        key: 'email',
+        label: 'Email (guardians and students may use only a mobile number)',
+        type: 'email',
+        required: false,
+      },
       { key: 'phone', label: 'Mobile number', required: false },
       {
         key: 'password',
