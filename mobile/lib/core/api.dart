@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -21,48 +22,61 @@ class ApiException implements Exception {
 /// access token with the refresh token once when a request gets 401, and retries once on 503.
 class Api {
   Api(this._store) {
-    _dio = Dio(BaseOptions(
-      baseUrl: School.apiUrl,
-      connectTimeout: const Duration(seconds: 15),
-      receiveTimeout: const Duration(seconds: 30),
-      headers: {'Accept': 'application/json'},
-    ));
-    _dio.interceptors.add(InterceptorsWrapper(
-      onRequest: (options, handler) {
-        if (accessToken != null && options.extra['noAuth'] != true) {
-          options.headers['Authorization'] = 'Bearer $accessToken';
-        }
-        if (campusId != null) options.headers['x-campus-id'] = campusId;
-        handler.next(options);
-      },
-      onError: (error, handler) async {
-        final options = error.requestOptions;
-        final status = error.response?.statusCode;
-        if (status == 401 && options.extra['noAuth'] != true && options.extra['retried'] != true) {
-          if (await _renew()) {
-            options.extra['retried'] = true;
+    if (kReleaseMode && !validReleaseApiUrl(School.apiUrl)) {
+      throw StateError('Release builds require an HTTPS API_URL');
+    }
+    _dio = Dio(
+      BaseOptions(
+        baseUrl: School.apiUrl,
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 30),
+        headers: {'Accept': 'application/json'},
+      ),
+    );
+    _dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          if (accessToken != null && options.extra['noAuth'] != true) {
             options.headers['Authorization'] = 'Bearer $accessToken';
+          }
+          if (campusId != null) options.headers['x-campus-id'] = campusId;
+          handler.next(options);
+        },
+        onError: (error, handler) async {
+          final options = error.requestOptions;
+          final status = error.response?.statusCode;
+          if (status == 401 &&
+              options.extra['noAuth'] != true &&
+              options.extra['retried'] != true) {
+            if (await _renew()) {
+              options.extra['retried'] = true;
+              options.headers['Authorization'] = 'Bearer $accessToken';
+              try {
+                return handler.resolve(await _dio.fetch(options));
+              } on DioException catch (e) {
+                return handler.next(e);
+              }
+            }
+            await onSessionEnded?.call();
+          }
+          if (status == 503 && options.extra['retried'] != true) {
+            final wait =
+                int.tryParse(
+                  error.response?.headers.value('retry-after') ?? '',
+                ) ??
+                3;
+            await Future<void>.delayed(Duration(seconds: wait.clamp(1, 5)));
+            options.extra['retried'] = true;
             try {
               return handler.resolve(await _dio.fetch(options));
             } on DioException catch (e) {
               return handler.next(e);
             }
           }
-          await onSessionEnded?.call();
-        }
-        if (status == 503 && options.extra['retried'] != true) {
-          final wait = int.tryParse(error.response?.headers.value('retry-after') ?? '') ?? 3;
-          await Future<void>.delayed(Duration(seconds: wait.clamp(1, 5)));
-          options.extra['retried'] = true;
-          try {
-            return handler.resolve(await _dio.fetch(options));
-          } on DioException catch (e) {
-            return handler.next(e);
-          }
-        }
-        handler.next(error);
-      },
-    ));
+          handler.next(error);
+        },
+      ),
+    );
   }
 
   final Store _store;
@@ -82,8 +96,11 @@ class Api {
       try {
         final token = await _store.refreshToken;
         if (token == null) return completer.complete(false);
-        final r = await _dio.post<Map<String, dynamic>>('/auth/refresh',
-            data: {'refreshToken': token}, options: Options(extra: {'noAuth': true}));
+        final r = await _dio.post<Map<String, dynamic>>(
+          '/auth/refresh',
+          data: {'refreshToken': token},
+          options: Options(extra: {'noAuth': true}),
+        );
         await useTokens(r.data!);
         completer.complete(true);
       } catch (_) {
@@ -107,7 +124,9 @@ class Api {
       final response = error.response;
       if (response == null) return ApiException(0, 'No internet connection');
       final data = response.data;
-      final message = data is Map && data['message'] != null ? '${data['message']}' : 'Request failed';
+      final message = data is Map && data['message'] != null
+          ? '${data['message']}'
+          : 'Request failed';
       return ApiException(response.statusCode ?? 0, message);
     }
     return ApiException(-1, '$error');
@@ -123,9 +142,11 @@ class Api {
 
   Future<dynamic> post(String path, [Object? body, bool auth = true]) async {
     try {
-      return (await _dio.post<dynamic>(path,
-              data: body ?? <String, dynamic>{}, options: Options(extra: {'noAuth': !auth})))
-          .data;
+      return (await _dio.post<dynamic>(
+        path,
+        data: body ?? <String, dynamic>{},
+        options: Options(extra: {'noAuth': !auth}),
+      )).data;
     } catch (e) {
       throw _wrap(e);
     }
@@ -143,7 +164,9 @@ class Api {
   Future<void> openPdf(String path, String fileName) async {
     try {
       final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/${fileName.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_')}');
+      final file = File(
+        '${dir.path}/${fileName.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_')}',
+      );
       await _dio.download(path, file.path);
       await OpenFilex.open(file.path, type: 'application/pdf');
     } catch (e) {

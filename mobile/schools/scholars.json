@@ -1,0 +1,9 @@
+{
+  "SCHOOL_SLUG": "scholars",
+  "APP_NAME": "Scholars School & College",
+  "APP_NAME_BN": "স্কলার্স স্কুল অ্যান্ড কলেজ",
+  "API_URL": "https://api.erp.13.203.3.1.sslip.io/api",
+  "ACCENT": "#22644F",
+  "ANDROID_APP_ID": "com.campusone.scholars",
+  "APP_ID_IOS": "com.campusone.scholars"
+}
