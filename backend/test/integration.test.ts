@@ -160,6 +160,7 @@ test(
       });
       await db.receiptCounter.deleteMany({ where: { campusId: { in: campusIds } } });
       await db.organizationSettings.deleteMany({ where: { organizationId: org.id } });
+      await db.smsCreditEntry.deleteMany({ where: { organizationId: org.id } });
       await db.paymentAllocation.deleteMany({
         where: { payment: { studentId: { in: studentIds } } },
       });
@@ -197,6 +198,42 @@ test(
       await db.subscription.deleteMany({ where: { organizationId: org.id } });
       await db.organization.delete({ where: { id: org.id } });
       await db.$disconnect();
+    });
+    await t.test('SMS credit endpoints enforce platform and school admin access', async () => {
+      assert.equal((await request('teacher', a.id, 'settings/sms-credit')).status, 403);
+      assert.equal((await request('teacher', a.id, 'notices/sms/retry', {})).status, 403);
+      assert.equal(
+        (
+          await request('admin', a.id, `platform/organizations/${org.id}/sms-credit`, {
+            amount: 3,
+            reference: 'access-test',
+          })
+        ).status,
+        403,
+      );
+      const login = await fetch(`${base}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: process.env.PLATFORM_ADMIN_EMAIL || 'platform@campusone.edu.bd',
+          password:
+            process.env.PLATFORM_SEED_PASSWORD || process.env.SEED_PASSWORD || 'CampusOne!2026',
+        }),
+      });
+      assert.equal(login.status, 201);
+      const response = await fetch(`${base}/platform/organizations/${org.id}/sms-credit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: login.headers.get('set-cookie')!.split(';')[0],
+        },
+        body: JSON.stringify({ amount: 3, reference: 'access-test' }),
+      });
+      assert.equal(response.status, 201);
+      const credit = await request('admin', b.id, 'settings/sms-credit');
+      assert.equal(credit.status, 200);
+      assert.equal(credit.data.balance, 3);
+      assert.equal(credit.data.history[0].reference, 'access-test');
     });
     await t.test(
       'setup checklist reflects campus data and dismissal is shared only within the organization',

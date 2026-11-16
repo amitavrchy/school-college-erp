@@ -233,6 +233,37 @@ export class PlatformController {
       },
     };
   }
+  @Post('organizations/:id/sms-credit')
+  async topUpSms(@Actor() c: Context, @Param('id') organizationId: string, @Body() body: unknown) {
+    const v = parse(
+      z.object({
+        amount: z.number().int().min(1).max(10000000),
+        reference: z.string().trim().min(1).max(120),
+      }),
+      body,
+    );
+    return this.db.serial(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${organizationId} FOR UPDATE`;
+      await tx.organization.findUniqueOrThrow({ where: { id: organizationId } });
+      const existing = await tx.smsCreditEntry.findUnique({
+        where: { organizationId_reference: { organizationId, reference: v.reference } },
+      });
+      if (existing) {
+        if (existing.amount !== v.amount)
+          throw new BadRequestException('Reference already used with a different amount');
+        return existing;
+      }
+      return tx.smsCreditEntry.create({
+        data: {
+          organizationId,
+          amount: v.amount,
+          reference: v.reference,
+          actorId: c.userId,
+          kind: 'TOP_UP',
+        },
+      });
+    });
+  }
   @Get('organizations/:id')
   async detail(@Param('id') organizationId: string) {
     const [organization, usage, events] = await Promise.all([

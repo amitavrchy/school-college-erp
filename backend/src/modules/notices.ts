@@ -5,11 +5,13 @@ import { Actor, Context, Roles, TEACHING, ACADEMIC, hasRole } from '../auth/acce
 import { Scope } from '../auth/scope';
 import { id, parse } from '../common';
 import { smsSegments } from '../domain/workflow';
+import { Jobs } from '../jobs';
 @Controller('notices')
 export class NoticesController {
   constructor(
     @Inject(Db) private db: Db,
     @Inject(Scope) private scope: Scope,
+    @Inject(Jobs) private jobs: Jobs,
   ) {}
   @Post(':id/schedule')
   @Roles(...ACADEMIC)
@@ -81,6 +83,11 @@ export class NoticesController {
     return this.db.notice.create({
       data: { ...data, campusId: c.campusId, audience: { sectionIds, studentIds } },
     });
+  }
+  @Post('sms/retry')
+  @Roles('SUPER_ADMIN', 'CAMPUS_ADMIN')
+  retrySms(@Actor() c: Context) {
+    return this.jobs.retryBlockedSms(c.orgId);
   }
   @Get('sms')
   @Roles(...ACADEMIC)

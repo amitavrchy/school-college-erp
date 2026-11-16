@@ -328,6 +328,7 @@ model Organization {
   tickets SupportTicket[]
   website SchoolWebsite?
   settings OrganizationSettings?
+  smsCredits SmsCreditEntry[]
 }
 /// School policy and branding. Defaults match the previous environment-wide behaviour.
 model OrganizationSettings {
@@ -811,6 +812,20 @@ model Notice {
   createdAt DateTime @default(now())
   messages SmsMessage[]
   @@index([status, scheduledAt])
+}
+model SmsCreditEntry {
+  id String @id @default(cuid())
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id])
+  amount Int
+  kind String
+  reference String?
+  actorId String?
+  messageId String?
+  createdAt DateTime @default(now())
+  @@unique([organizationId, reference])
+  @@index([organizationId, createdAt])
+  @@index([messageId])
 }
 model SmsMessage {
   id String @id @default(cuid())

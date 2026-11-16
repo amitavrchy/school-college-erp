@@ -52,7 +52,12 @@ export default function Platform() {
     `${o.name} ${o.slug}`.toLowerCase().includes(search.toLowerCase()),
   );
   async function submit(v: Record<string, any>) {
-    if (modal.type === 'grant') {
+    if (modal.type === 'sms') {
+      await post(`platform/organizations/${modal.org.id}/sms-credit`, {
+        amount: Number(v.amount),
+        reference: v.reference,
+      });
+    } else if (modal.type === 'grant') {
       await post(`platform/organizations/${modal.org.id}/grant`, {
         planId: v.planId,
         period: v.period,
@@ -106,175 +111,180 @@ export default function Platform() {
   }
   const planOptions = data.plans.map((p: any) => ({ value: p.id, label: p.name }));
   const fields =
-    modal?.type === 'grant'
+    modal?.type === 'sms'
       ? [
-          {
-            key: 'planId',
-            label: 'Plan',
-            options: planOptions,
-            defaultValue: modal.org.subscription?.planId,
-          },
-          {
-            key: 'period',
-            label: 'Activation period',
-            options: [
-              { value: 'MONTHLY', label: 'One month' },
-              { value: 'YEARLY', label: 'One year' },
-            ],
-          },
-          {
-            key: 'amount',
-            label: 'Amount actually received (BDT; 0 for complimentary)',
-            type: 'number',
-            min: 0,
-            step: '0.01',
-            defaultValue: 0,
-          },
-          { key: 'reason', label: 'Activation reason / payment evidence', type: 'textarea' },
+          { key: 'amount', label: 'SMS segment credits', type: 'number', min: 1, step: '1' },
+          { key: 'reference', label: 'Payment or top-up reference' },
         ]
-      : modal?.type === 'review'
+      : modal?.type === 'grant'
         ? [
             {
-              key: 'decision',
-              label: 'Decision',
+              key: 'planId',
+              label: 'Plan',
+              options: planOptions,
+              defaultValue: modal.org.subscription?.planId,
+            },
+            {
+              key: 'period',
+              label: 'Activation period',
               options: [
-                { value: 'APPROVED', label: 'Approve — funds checked' },
-                { value: 'REJECTED', label: 'Reject — not verified' },
+                { value: 'MONTHLY', label: 'One month' },
+                { value: 'YEARLY', label: 'One year' },
               ],
             },
             {
               key: 'amount',
-              label: `Amount actually received (expected ${bdt(modal.payment.amountMinor)})`,
+              label: 'Amount actually received (BDT; 0 for complimentary)',
               type: 'number',
               min: 0,
               step: '0.01',
-              required: false,
+              defaultValue: 0,
             },
-            { key: 'note', label: 'Review notes', type: 'textarea' },
+            { key: 'reason', label: 'Activation reason / payment evidence', type: 'textarea' },
           ]
-        : modal?.type === 'status'
+        : modal?.type === 'review'
           ? [
               {
-                key: 'status',
-                label: 'Institution access',
+                key: 'decision',
+                label: 'Decision',
                 options: [
-                  { value: 'ACTIVE', label: 'Active' },
-                  { value: 'SUSPENDED', label: 'Suspended' },
+                  { value: 'APPROVED', label: 'Approve — funds checked' },
+                  { value: 'REJECTED', label: 'Reject — not verified' },
                 ],
-                defaultValue: modal.org.status,
               },
-              { key: 'reason', label: 'Reason for this change', type: 'textarea' },
+              {
+                key: 'amount',
+                label: `Amount actually received (expected ${bdt(modal.payment.amountMinor)})`,
+                type: 'number',
+                min: 0,
+                step: '0.01',
+                required: false,
+              },
+              { key: 'note', label: 'Review notes', type: 'textarea' },
             ]
-          : modal?.type === 'website'
+          : modal?.type === 'status'
             ? [
                 {
-                  key: 'enabled',
-                  label: 'School website',
+                  key: 'status',
+                  label: 'Institution access',
                   options: [
-                    { value: 'true', label: 'Enabled' },
-                    { value: 'false', label: 'Disabled' },
+                    { value: 'ACTIVE', label: 'Active' },
+                    { value: 'SUSPENDED', label: 'Suspended' },
                   ],
-                  defaultValue: String(modal.org.websiteEnabled),
+                  defaultValue: modal.org.status,
                 },
+                { key: 'reason', label: 'Reason for this change', type: 'textarea' },
               ]
-            : modal?.type === 'plan'
+            : modal?.type === 'website'
               ? [
-                  { key: 'name', label: 'Plan name', defaultValue: modal.plan.name },
                   {
-                    key: 'description',
-                    label: 'Description',
-                    defaultValue: modal.plan.description,
-                  },
-                  {
-                    key: 'monthly',
-                    label: 'Monthly price (BDT)',
-                    type: 'number',
-                    min: 0,
-                    defaultValue: modal.plan.monthlyMinor / 100,
-                  },
-                  {
-                    key: 'annual',
-                    label: 'Yearly price (BDT)',
-                    type: 'number',
-                    min: 0,
-                    defaultValue: modal.plan.annualMinor / 100,
-                  },
-                  {
-                    key: 'maxCampuses',
-                    label: 'Campus limit',
-                    type: 'number',
-                    min: 1,
-                    defaultValue: modal.plan.maxCampuses,
-                  },
-                  {
-                    key: 'maxStudents',
-                    label: 'Student record limit',
-                    type: 'number',
-                    min: 1,
-                    defaultValue: modal.plan.maxStudents,
-                  },
-                  {
-                    key: 'maxStaff',
-                    label: 'Staff account limit',
-                    type: 'number',
-                    min: 1,
-                    defaultValue: modal.plan.maxStaff,
-                  },
-                  {
-                    key: 'modules',
-                    label: 'Modules',
+                    key: 'enabled',
+                    label: 'School website',
                     options: [
-                      { value: 'core', label: 'Core + homework & support' },
-                      { value: 'all', label: 'Core + homework, support, library & transport' },
+                      { value: 'true', label: 'Enabled' },
+                      { value: 'false', label: 'Disabled' },
                     ],
-                    defaultValue: modal.plan.features.includes('library') ? 'all' : 'core',
-                  },
-                  {
-                    key: 'active',
-                    label: 'Available for new subscriptions',
-                    options: [
-                      { value: 'true', label: 'Yes' },
-                      { value: 'false', label: 'No' },
-                    ],
-                    defaultValue: String(modal.plan.active),
+                    defaultValue: String(modal.org.websiteEnabled),
                   },
                 ]
-              : [
-                  {
-                    key: 'bkashNumber',
-                    label: 'bKash receiving number',
-                    type: 'tel',
-                    required: false,
-                    defaultValue: data.settings?.bkashNumber || '',
-                  },
-                  {
-                    key: 'nagadNumber',
-                    label: 'Nagad receiving number',
-                    type: 'tel',
-                    required: false,
-                    defaultValue: data.settings?.nagadNumber || '',
-                  },
-                  {
-                    key: 'bankInstructions',
-                    label: 'Bank transfer instructions',
-                    type: 'textarea',
-                    required: false,
-                    defaultValue: data.settings?.bankInstructions || '',
-                  },
-                  {
-                    key: 'paymentInstructions',
-                    label: 'Payment review instructions',
-                    type: 'textarea',
-                    defaultValue: data.settings?.paymentInstructions || '',
-                  },
-                  {
-                    key: 'supportEmail',
-                    label: 'Platform support email',
-                    type: 'email',
-                    required: false,
-                    defaultValue: data.settings?.supportEmail || '',
-                  },
-                ];
+              : modal?.type === 'plan'
+                ? [
+                    { key: 'name', label: 'Plan name', defaultValue: modal.plan.name },
+                    {
+                      key: 'description',
+                      label: 'Description',
+                      defaultValue: modal.plan.description,
+                    },
+                    {
+                      key: 'monthly',
+                      label: 'Monthly price (BDT)',
+                      type: 'number',
+                      min: 0,
+                      defaultValue: modal.plan.monthlyMinor / 100,
+                    },
+                    {
+                      key: 'annual',
+                      label: 'Yearly price (BDT)',
+                      type: 'number',
+                      min: 0,
+                      defaultValue: modal.plan.annualMinor / 100,
+                    },
+                    {
+                      key: 'maxCampuses',
+                      label: 'Campus limit',
+                      type: 'number',
+                      min: 1,
+                      defaultValue: modal.plan.maxCampuses,
+                    },
+                    {
+                      key: 'maxStudents',
+                      label: 'Student record limit',
+                      type: 'number',
+                      min: 1,
+                      defaultValue: modal.plan.maxStudents,
+                    },
+                    {
+                      key: 'maxStaff',
+                      label: 'Staff account limit',
+                      type: 'number',
+                      min: 1,
+                      defaultValue: modal.plan.maxStaff,
+                    },
+                    {
+                      key: 'modules',
+                      label: 'Modules',
+                      options: [
+                        { value: 'core', label: 'Core + homework & support' },
+                        { value: 'all', label: 'Core + homework, support, library & transport' },
+                      ],
+                      defaultValue: modal.plan.features.includes('library') ? 'all' : 'core',
+                    },
+                    {
+                      key: 'active',
+                      label: 'Available for new subscriptions',
+                      options: [
+                        { value: 'true', label: 'Yes' },
+                        { value: 'false', label: 'No' },
+                      ],
+                      defaultValue: String(modal.plan.active),
+                    },
+                  ]
+                : [
+                    {
+                      key: 'bkashNumber',
+                      label: 'bKash receiving number',
+                      type: 'tel',
+                      required: false,
+                      defaultValue: data.settings?.bkashNumber || '',
+                    },
+                    {
+                      key: 'nagadNumber',
+                      label: 'Nagad receiving number',
+                      type: 'tel',
+                      required: false,
+                      defaultValue: data.settings?.nagadNumber || '',
+                    },
+                    {
+                      key: 'bankInstructions',
+                      label: 'Bank transfer instructions',
+                      type: 'textarea',
+                      required: false,
+                      defaultValue: data.settings?.bankInstructions || '',
+                    },
+                    {
+                      key: 'paymentInstructions',
+                      label: 'Payment review instructions',
+                      type: 'textarea',
+                      defaultValue: data.settings?.paymentInstructions || '',
+                    },
+                    {
+                      key: 'supportEmail',
+                      label: 'Platform support email',
+                      type: 'email',
+                      required: false,
+                      defaultValue: data.settings?.supportEmail || '',
+                    },
+                  ];
   return (
     <div className="platform-shell">
       <header className="platform-header">
@@ -389,6 +399,9 @@ export default function Platform() {
                         <div className="inline-actions">
                           <Button variant="ghost" onClick={() => setDetail(o.id)}>
                             Inspect
+                          </Button>
+                          <Button variant="ghost" onClick={() => setModal({ type: 'sms', org: o })}>
+                            Top up SMS
                           </Button>
                           <Button
                             variant="ghost"
@@ -511,17 +524,19 @@ export default function Platform() {
         {modal && (
           <FormModal
             title={
-              modal.type === 'grant'
-                ? `Activate ${modal.org.name}`
-                : modal.type === 'review'
-                  ? `Review ${modal.payment.reference}`
-                  : modal.type === 'status'
-                    ? 'Institution access'
-                    : modal.type === 'website'
-                      ? `School website · ${modal.org.name}`
-                      : modal.type === 'plan'
-                        ? 'Configure subscription plan'
-                        : 'Receiving accounts'
+              modal.type === 'sms'
+                ? `Top up SMS · ${modal.org.name}`
+                : modal.type === 'grant'
+                  ? `Activate ${modal.org.name}`
+                  : modal.type === 'review'
+                    ? `Review ${modal.payment.reference}`
+                    : modal.type === 'status'
+                      ? 'Institution access'
+                      : modal.type === 'website'
+                        ? `School website · ${modal.org.name}`
+                        : modal.type === 'plan'
+                          ? 'Configure subscription plan'
+                          : 'Receiving accounts'
             }
             fields={fields}
             onClose={() => setModal(null)}

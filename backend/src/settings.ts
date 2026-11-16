@@ -133,6 +133,32 @@ export class SettingsController {
   get(@Actor() c: Context) {
     return this.settings.policy(c.orgId);
   }
+  @Get('sms-credit')
+  @Roles(...ADMIN)
+  async smsCredit(@Actor() c: Context) {
+    const [balance, history, blocked] = await Promise.all([
+      this.db.smsCreditEntry.aggregate({
+        where: { organizationId: c.orgId },
+        _sum: { amount: true },
+      }),
+      this.db.smsCreditEntry.findMany({
+        where: { organizationId: c.orgId },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      }),
+      this.db.smsMessage.count({
+        where: {
+          status: 'INSUFFICIENT_CREDIT',
+          campusId: {
+            in: (
+              await this.db.campus.findMany({ where: { orgId: c.orgId }, select: { id: true } })
+            ).map((c) => c.id),
+          },
+        },
+      }),
+    ]);
+    return { balance: balance._sum.amount ?? 0, history, blocked };
+  }
   @Patch()
   @Roles(...ADMIN)
   async update(@Actor() c: Context, @Body() body: unknown) {

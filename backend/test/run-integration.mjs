@@ -9,6 +9,7 @@ const child = spawn(
     'test/integration.test.ts',
     'test/saas.test.ts',
     'test/websites.test.ts',
+    'test/sms-credit.test.ts',
   ],
   { stdio: 'inherit', env: { ...process.env, RUN_INTEGRATION: 'true' } },
 );

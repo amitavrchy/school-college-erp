@@ -35,7 +35,13 @@ export default function Settings() {
   const { data: users, reload } = useData(admin ? 'users' : null),
     { data: campuses, reload: reloadCampuses } = useData('campuses'),
     { data: holidays, reload: reloadHolidays } = useData('holidays'),
-    { data: policy, reload: reloadPolicy } = useData(admin ? 'settings' : null);
+    { data: policy, reload: reloadPolicy } = useData(admin ? 'settings' : null),
+    {
+      data: smsCredit,
+      error: smsError,
+      loading: smsLoading,
+      reload: reloadSms,
+    } = useData(admin ? 'settings/sms-credit' : null);
   const [tab, setTab] = useState('Campus'),
     [modal, setModal] = useState(''),
     [toast, setToast] = useState(''),
@@ -148,13 +154,16 @@ export default function Settings() {
       <Panel>
         <div className="toolbar">
           <div className="segmented">
-            {['Campus', ...(admin ? ['Users', 'School policy'] : []), 'Calendar', 'Account'].map(
-              (t) => (
-                <button key={t} className={tab === t ? 'selected' : ''} onClick={() => setTab(t)}>
-                  {t}
-                </button>
-              ),
-            )}
+            {[
+              'Campus',
+              ...(admin ? ['Users', 'School policy', 'SMS credit'] : []),
+              'Calendar',
+              'Account',
+            ].map((t) => (
+              <button key={t} className={tab === t ? 'selected' : ''} onClick={() => setTab(t)}>
+                {t}
+              </button>
+            ))}
           </div>
           {tab === 'Users' && admin && (
             <Button onClick={() => setModal('user')}>
@@ -392,6 +401,71 @@ export default function Settings() {
                 </label>
               </dd>
             </dl>
+          </div>
+        ) : tab === 'SMS credit' && admin ? (
+          <div>
+            <h2>SMS credit</h2>
+            {smsCredit ? (
+              <>
+                <p>
+                  <strong>{smsCredit.balance}</strong> segment credits available
+                </p>
+                {smsCredit.blocked > 0 && (
+                  <p role="alert">
+                    {smsCredit.blocked} SMS messages could not be sent because credit was
+                    insufficient. Contact the platform administrator to top up. Blocked messages are
+                    not sent automatically.
+                  </p>
+                )}
+                {smsCredit.blocked > 0 && smsCredit.balance > 0 && (
+                  <Button
+                    onClick={async () => {
+                      try {
+                        const result = await post('notices/sms/retry', {});
+                        setToast(`${result.queued} messages queued for retry`);
+                        await reloadSms();
+                      } catch (error) {
+                        setToast((error as Error).message);
+                      }
+                    }}
+                  >
+                    Retry blocked SMS
+                  </Button>
+                )}
+                <h3>Credit history</h3>
+                {smsCredit.history.length === 0 ? (
+                  <p>No credit activity yet.</p>
+                ) : (
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Date</th>
+                          <th>Activity</th>
+                          <th>Credits</th>
+                          <th>Reference</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {smsCredit.history.map((entry: any) => (
+                          <tr key={entry.id}>
+                            <td>{displayDate(entry.createdAt)}</td>
+                            <td>{entry.kind.replaceAll('_', ' ')}</td>
+                            <td>
+                              {entry.amount > 0 ? '+' : ''}
+                              {entry.amount}
+                            </td>
+                            <td>{entry.reference || entry.messageId || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            ) : (
+              <State loading={smsLoading} error={smsError} />
+            )}
           </div>
         ) : tab === 'Calendar' ? (
           <div className="table-wrap">
