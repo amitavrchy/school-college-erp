@@ -28,6 +28,7 @@ import {
 import { useCampus } from '@/components/shell';
 import { Badge, Button, PageTitle, Panel, Stat, State } from '@/components/ui';
 import { CampusArt } from '@/components/campus-art';
+import { SetupChecklist } from '@/components/setup-checklist';
 import { bdt, csvDownload, displayDate, number } from '@/lib/api';
 import { useData } from '@/lib/use-data';
 export default function Overview() {
@@ -128,6 +129,9 @@ export default function Overview() {
         </div>
         <CampusArt />
       </section>
+      {can('SUPER_ADMIN', 'CAMPUS_ADMIN') && (
+        <SetupChecklist key={campus.id} campusName={campus.name} />
+      )}
       <div className="stats-grid">
         <Stat
           label="Total students"

@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { useI18n } from './i18n';
 import { Download, Upload } from 'lucide-react';
 import { api, post } from '@/lib/api';
 import { useData } from '@/lib/use-data';
@@ -11,12 +12,13 @@ export function AdmissionUpload({
   applicationId: string;
   token: string;
 }) {
+  const { t } = useI18n();
   const [busy, setBusy] = useState(false),
     [message, setMessage] = useState('');
   async function upload(file: File) {
     setMessage('');
     if (file.size > 5_000_000) {
-      setMessage('Please choose a file smaller than 5 MB.');
+      setMessage(t('Please choose a file smaller than 5 MB.'));
       return;
     }
     setBusy(true);
@@ -33,7 +35,7 @@ export function AdmissionUpload({
         mimeType: file.type,
         content,
       });
-      setMessage(`${file.name} uploaded securely.`);
+      setMessage(`${file.name} ${t('uploaded securely.')}`);
     } catch (e) {
       setMessage((e as Error).message);
     } finally {
@@ -42,13 +44,14 @@ export function AdmissionUpload({
   }
   return (
     <div className="form-grid" style={{ textAlign: 'left', width: '100%' }}>
-      <h3>Supporting documents</h3>
+      <h3>{t('Supporting documents')}</h3>
       <p>
-        Attach a birth certificate or previous report card. PDF, PNG or JPEG; up to 5 MB each,
-        maximum five files. Files are encrypted at rest.
+        {t(
+          'Attach a birth certificate or previous report card. PDF, PNG or JPEG; up to 5 MB each, maximum five files. Files are encrypted at rest.',
+        )}
       </p>
       <label>
-        Choose a document
+        {t('Choose a document')}
         <input
           type="file"
           accept="application/pdf,image/png,image/jpeg"
@@ -60,7 +63,7 @@ export function AdmissionUpload({
         />
       </label>
       {message && <p role="status">{message}</p>}
-      {busy && <p role="status">Encrypting and uploading…</p>}
+      {busy && <p role="status">{t('Encrypting and uploading…')}</p>}
     </div>
   );
 }

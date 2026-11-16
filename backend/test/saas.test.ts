@@ -74,6 +74,75 @@ test(
     });
     assert.equal(platform.status, 201);
     await t.test(
+      'renewal milestones, invoice and grace transitions are persisted once',
+      async () => {
+        const { Db } = await import('../src/db');
+        const { subscriptionLifecycle } = await import('../src/saas/lifecycle');
+        const lifecycleDb = new Db();
+        const sent: string[] = [];
+        const notifier = {
+          email: async (to: string) => {
+            sent.push(to);
+          },
+        } as any;
+        const original = await db.subscription.findUniqueOrThrow({
+          where: { organizationId: b.organization.id },
+        });
+        const end = new Date(Date.now() + 7 * 86400000);
+        await db.subscription.update({
+          where: { id: original.id },
+          data: { currentPeriodEnd: end },
+        });
+        try {
+          for (const days of [7, 3, 1, 0]) {
+            const now = new Date(end.getTime() - days * 86400000);
+            await Promise.all([
+              subscriptionLifecycle(lifecycleDb, notifier, now, b.organization.id),
+              subscriptionLifecycle(lifecycleDb, notifier, now, b.organization.id),
+            ]);
+          }
+          assert.equal(sent.length, 4);
+          assert.equal(
+            await db.subscriptionReminder.count({ where: { organizationId: b.organization.id } }),
+            4,
+          );
+          const invoice = await db.subscriptionInvoice.findFirstOrThrow({
+            where: { organizationId: b.organization.id },
+          });
+          assert.equal(invoice.dueDate.getTime(), end.getTime());
+          assert.equal(invoice.amountMinor, 650000);
+          assert.equal(invoice.status, 'OPEN');
+          assert.equal(
+            (await db.subscription.findUniqueOrThrow({ where: { id: original.id } })).status,
+            'PAST_DUE',
+          );
+          const summary = await request(b.cookie, b.campus.id, 'saas/me');
+          assert.equal(summary.data.invoices[0].id, invoice.id);
+          await subscriptionLifecycle(
+            lifecycleDb,
+            notifier,
+            new Date(end.getTime() + 7 * 86400000),
+            b.organization.id,
+          );
+          assert.equal(
+            (await db.subscription.findUniqueOrThrow({ where: { id: original.id } })).status,
+            'EXPIRED',
+          );
+          assert.equal(sent.length, 4);
+        } finally {
+          await db.subscription.update({
+            where: { id: original.id },
+            data: { status: original.status, currentPeriodEnd: original.currentPeriodEnd },
+          });
+          await db.subscriptionInvoice.deleteMany({ where: { organizationId: b.organization.id } });
+          await db.subscriptionReminder.deleteMany({
+            where: { organizationId: b.organization.id },
+          });
+          await lifecycleDb.$disconnect();
+        }
+      },
+    );
+    await t.test(
       'institution owners cannot cross tenant boundaries or enter platform administration',
       async () => {
         assert.equal((await request(a.cookie, b.campus.id, 'students')).status, 403);
@@ -119,6 +188,15 @@ test(
           senderPhone: '01712345678',
         });
         assert.equal(submitted.status, 201);
+        assert.ok(submitted.data.invoiceId);
+        assert.equal(
+          (
+            await db.subscriptionInvoice.findUniqueOrThrow({
+              where: { id: submitted.data.invoiceId },
+            })
+          ).status,
+          'OPEN',
+        );
         assert.equal(
           (
             await db.subscription.findUniqueOrThrow({
@@ -174,6 +252,14 @@ test(
             where: { organizationId: a.organization.id, action: 'SUBSCRIPTION_ACTIVATED' },
           }),
           1,
+        );
+        assert.equal(
+          (
+            await db.subscriptionInvoice.findUniqueOrThrow({
+              where: { id: submitted.data.invoiceId },
+            })
+          ).status,
+          'PAID',
         );
         const sub = await db.subscription.findUniqueOrThrow({
           where: { organizationId: a.organization.id },
@@ -672,6 +758,29 @@ test(
           403,
           'an account cannot sign in to another school app',
         );
+        await db.organizationMember.create({
+          data: { organizationId: b.organization.id, userId: a.user.id, role: 'MEMBER' },
+        });
+        await db.userCampusRole.create({
+          data: { campusId: b.campus.id, userId: a.user.id, role: 'GUARDIAN' },
+        });
+        try {
+          const me = await call(signIn.data.accessToken, a.campus.id, 'auth/me');
+          assert.equal(me.status, 200);
+          assert.ok(me.data.roles.every((r: any) => r.campus.orgId === a.organization.id));
+          assert.ok(me.data.memberships.every((m: any) => m.organizationId === a.organization.id));
+          assert.equal(
+            (await call(signIn.data.accessToken, b.campus.id, 'guardians/me/dashboard')).status,
+            403,
+          );
+        } finally {
+          await db.userCampusRole.deleteMany({
+            where: { campusId: b.campus.id, userId: a.user.id },
+          });
+          await db.organizationMember.deleteMany({
+            where: { organizationId: b.organization.id, userId: a.user.id },
+          });
+        }
         // Rotation: the new refresh token works once; replaying the old one ends the chain.
         const first = await call('', '', 'auth/refresh', {
           refreshToken: signIn.data.refreshToken,
@@ -697,7 +806,7 @@ test(
         assert.equal(guardian.status, 201, JSON.stringify(guardian.data));
         const unknown = await call('', '', 'auth/codes', {
           purpose: 'GUARDIAN_LOGIN',
-          contact: '01999999999',
+          contact: `019${String(Date.now()).slice(-8)}`,
           school: a.organization.slug,
         });
         assert.equal(unknown.status, 201);
@@ -742,19 +851,35 @@ test(
         });
       },
     );
-    await t.test('expired subscriptions preserve reads and block operational writes', async () => {
-      await db.subscription.update({
-        where: { organizationId: a.organization.id },
-        data: { currentPeriodEnd: new Date(Date.now() - 86400000) },
-      });
-      assert.equal((await request(a.cookie, a.campus.id, 'students')).status, 200);
-      assert.equal(
-        (await request(a.cookie, a.campus.id, 'classes', { name: 'Class 7', numericLevel: 7 }))
-          .status,
-        402,
-      );
-      assert.equal((await request(a.cookie, a.campus.id, 'saas/me')).status, 200);
-      assert.equal((await request(a.cookie, a.campus.id, 'library/books')).status, 402);
-    });
+    await t.test(
+      'grace permits operations, then expiry preserves reads and blocks writes',
+      async () => {
+        await db.subscription.update({
+          where: { organizationId: a.organization.id },
+          data: { currentPeriodEnd: new Date(Date.now() - 86400000) },
+        });
+        assert.equal(
+          (
+            await request(a.cookie, a.campus.id, 'classes', {
+              name: 'Grace class',
+              numericLevel: 12,
+            })
+          ).status,
+          201,
+        );
+        await db.subscription.update({
+          where: { organizationId: a.organization.id },
+          data: { currentPeriodEnd: new Date(Date.now() - 8 * 86400000) },
+        });
+        assert.equal((await request(a.cookie, a.campus.id, 'students')).status, 200);
+        assert.equal(
+          (await request(a.cookie, a.campus.id, 'classes', { name: 'Class 7', numericLevel: 7 }))
+            .status,
+          402,
+        );
+        assert.equal((await request(a.cookie, a.campus.id, 'saas/me')).status, 200);
+        assert.equal((await request(a.cookie, a.campus.id, 'library/books')).status, 402);
+      },
+    );
   },
 );

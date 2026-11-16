@@ -59,6 +59,7 @@ export const configSchema = z
     ADMISSION_OFFER_HOURS: z.coerce.number().int().min(1).default(48),
     SIBLING_DISCOUNT_BPS: z.coerce.number().int().min(0).max(10000).default(0),
     FEE_REMINDERS_ENABLED: bool(false),
+    SUBSCRIPTION_GRACE_DAYS: z.coerce.number().int().min(0).max(365).default(7),
     SCHOOL_SITE_BASE_DOMAIN: z.string().default('localhost'),
     SCHOOL_SITE_CNAME_TARGET: optional,
     /**

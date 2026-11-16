@@ -5,11 +5,13 @@ import { Actor, Context, Roles, TEACHING, ACADEMIC, hasRole } from '../auth/acce
 import { Scope } from '../auth/scope';
 import { id, parse } from '../common';
 import { smsSegments } from '../domain/workflow';
+import { Jobs } from '../jobs';
 @Controller('notices')
 export class NoticesController {
   constructor(
     @Inject(Db) private db: Db,
     @Inject(Scope) private scope: Scope,
+    @Inject(Jobs) private jobs: Jobs,
   ) {}
   @Post(':id/schedule')
   @Roles(...ACADEMIC)
@@ -34,13 +36,18 @@ export class NoticesController {
       where: this.scope.studentFilter(c),
       include: { enrollments: true },
     });
-    const sectionIds = new Set(students.flatMap((s) => s.enrollments.map((e) => e.sectionId)));
     return all.filter((n) => {
       const a = n.audience as { sectionIds?: string[]; studentIds?: string[] };
       return (
         (!a.sectionIds?.length && !a.studentIds?.length) ||
-        ((!a.sectionIds?.length || a.sectionIds.some((id) => sectionIds.has(id))) &&
-          (!a.studentIds?.length || students.some((s) => a.studentIds!.includes(s.id))))
+        students.some(
+          (s) =>
+            (!a.studentIds?.length || a.studentIds.includes(s.id)) &&
+            (!a.sectionIds?.length ||
+              s.enrollments.some(
+                (e) => e.status === 'ACTIVE' && a.sectionIds!.includes(e.sectionId),
+              )),
+        )
       );
     });
   }
@@ -76,6 +83,11 @@ export class NoticesController {
     return this.db.notice.create({
       data: { ...data, campusId: c.campusId, audience: { sectionIds, studentIds } },
     });
+  }
+  @Post('sms/retry')
+  @Roles('SUPER_ADMIN', 'CAMPUS_ADMIN')
+  retrySms(@Actor() c: Context) {
+    return this.jobs.retryBlockedSms(c.orgId);
   }
   @Get('sms')
   @Roles(...ACADEMIC)

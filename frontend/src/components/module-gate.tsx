@@ -4,10 +4,12 @@ import { LockKeyhole } from 'lucide-react';
 import { useCampus } from './shell';
 import { Panel } from './ui';
 export function ModuleGate({ feature, children }: { feature: string; children: React.ReactNode }) {
-  const { features, billing, organization } = useCampus();
+  const { features, billing, organization, user } = useCampus();
   const expired =
     !organization?.subscription ||
-    new Date(organization.subscription.currentPeriodEnd) < new Date() ||
+    new Date(organization.subscription.currentPeriodEnd).getTime() +
+      user.subscriptionGraceDays * 86400000 <= Date.now() ||
+    !['TRIAL', 'ACTIVE', 'PAST_DUE'].includes(organization.subscription.status) ||
     organization.status !== 'ACTIVE';
   if (features.includes(feature) && !expired) return children;
   return (

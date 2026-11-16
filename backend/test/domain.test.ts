@@ -99,4 +99,8 @@ test('Bangla SMS uses UCS-2 multipart limits', () => {
   assert.equal(smsSegments('ক'.repeat(71)).segments, 2);
   assert.equal(smsSegments('a'.repeat(160)).segments, 1);
   assert.equal(smsSegments('a'.repeat(161)).segments, 2);
+  assert.equal(smsSegments('^'.repeat(80)).segments, 1);
+  assert.equal(smsSegments('^'.repeat(81)).segments, 2);
+  assert.deepEqual(smsSegments('😀'.repeat(36)), { encoding: 'UCS-2', segments: 2 });
+  assert.equal(smsSegments('`').encoding, 'UCS-2');
 });

@@ -82,6 +82,8 @@ export async function removeTestTenant(db: PrismaClient, organizationId: string)
       await tx.userCampusRole.deleteMany({ where: { campusId: { in: ids } } });
       await tx.campus.deleteMany({ where: { orgId: organizationId } });
       await tx.subscriptionPayment.deleteMany({ where: { organizationId } });
+      await tx.subscriptionInvoice.deleteMany({ where: { organizationId } });
+      await tx.subscriptionReminder.deleteMany({ where: { organizationId } });
       await tx.subscriptionEvent.deleteMany({ where: { organizationId } });
       await tx.subscription.deleteMany({ where: { organizationId } });
       await tx.organizationMember.deleteMany({ where: { organizationId } });

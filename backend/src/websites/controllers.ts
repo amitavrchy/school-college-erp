@@ -12,6 +12,10 @@ import {
   Req,
   Res,
   NotFoundException,
+  CanActivate,
+  ExecutionContext,
+  Injectable,
+  UseGuards,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
@@ -22,8 +26,22 @@ import { Websites } from './service';
 import { contentSchema } from './content';
 import { WebsiteResults } from './results';
 import { Jobs } from '../jobs';
+@Injectable()
+export class WebsiteEnabledGuard implements CanActivate {
+  constructor(@Inject(Websites) private sites: Websites) {}
+  async canActivate(context: ExecutionContext) {
+    const actor = context.switchToHttp().getRequest().actor as Context;
+    const org = await this.sites.db.organization.findUnique({
+      where: { id: actor.orgId },
+      select: { websiteEnabled: true },
+    });
+    if (!org?.websiteEnabled) throw new NotFoundException('School website not found');
+    return true;
+  }
+}
 const revision = z.number().int().positive();
 @Controller('website')
+@UseGuards(WebsiteEnabledGuard)
 @Roles(...ACADEMIC)
 export class WebsiteController {
   constructor(
@@ -136,7 +154,7 @@ export class PublicWebsitesController {
   }
   @Get('media/:id') async media(@Param('id') id: string, @Res() res: Response) {
     const asset = await this.sites.db.websiteAsset.findFirst({
-      where: { id, website: { organization: { status: 'ACTIVE' } } },
+      where: { id, website: { organization: { status: 'ACTIVE', websiteEnabled: true } } },
     });
     if (!asset) throw new NotFoundException('Media not found');
     res.set({
@@ -144,7 +162,7 @@ export class PublicWebsitesController {
       'Cross-Origin-Resource-Policy': 'cross-origin',
       'X-Content-Type-Options': 'nosniff',
       'X-Robots-Tag': 'noindex',
-      'Cache-Control': 'public, max-age=3600',
+      'Cache-Control': 'no-store',
       'Content-Security-Policy': "sandbox; default-src 'none'",
       'Content-Disposition': `${asset.mimeType === 'application/pdf' ? 'attachment' : 'inline'}; filename="${asset.fileName}"`,
     });

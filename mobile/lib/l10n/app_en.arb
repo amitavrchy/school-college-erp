@@ -83,6 +83,7 @@
   "somethingWrong": "Something went wrong",
   "updateRequired": "Please update the app to continue.",
   "schoolInactive": "The school's subscription is not active. Please contact the school office.",
+  "subscriptionPastDue": "The school's subscription is past due. Please contact the school office.",
   "children": "Children",
   "classSection": "Class {name}, section {section}",
   "@classSection": {

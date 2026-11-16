@@ -29,6 +29,8 @@ class FamilyShell extends ConsumerWidget {
       body: Column(children: [
         if (config != null && config['active'] == false)
           MaterialBanner(content: Text(t.schoolInactive), actions: const [SizedBox.shrink()]),
+        if (config != null && config['active'] == true && config['subscriptionPastDue'] == true)
+          MaterialBanner(content: Text(t.subscriptionPastDue), actions: const [SizedBox.shrink()]),
         Expanded(child: shell),
       ]),
       bottomNavigationBar: NavigationBar(

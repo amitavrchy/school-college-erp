@@ -175,6 +175,10 @@ class AppLocalizationsBn extends AppLocalizations {
       'স্কুলের সাবস্ক্রিপশন চালু নেই। স্কুল অফিসে যোগাযোগ করুন।';
 
   @override
+  String get subscriptionPastDue =>
+      'স্কুলের সাবস্ক্রিপশনের মেয়াদ পেরিয়েছে। স্কুল অফিসে যোগাযোগ করুন।';
+
+  @override
   String get children => 'সন্তান';
 
   @override

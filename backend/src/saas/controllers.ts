@@ -19,6 +19,7 @@ import { Actor, Context, Public, PlatformOnly, BillingAccess, AccountAccess } fr
 import { id, parse, phone } from '../common';
 import { config } from '../config';
 import { Saas } from './service';
+import { issueInvoice } from './lifecycle';
 import { normalizeContact } from '../auth/otp';
 import { startSession } from '../auth/session';
 const institution = z.object({
@@ -132,9 +133,19 @@ export class SaasController {
       );
     return this.db.serial(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${c.orgId} FOR UPDATE`;
-      const amountMinor = v.period === 'YEARLY' ? plan.annualMinor : plan.monthlyMinor;
+      const sub = await tx.subscription.findUniqueOrThrow({ where: { organizationId: c.orgId } });
+      const invoice = await issueInvoice(tx, sub, plan, v.period);
+      if (invoice.status !== 'OPEN')
+        throw new BadRequestException('This invoice is no longer payable');
+      const amountMinor = invoice.amountMinor;
       const payment = await tx.subscriptionPayment.create({
-        data: { ...v, organizationId: c.orgId, amountMinor, submittedBy: c.userId },
+        data: {
+          ...v,
+          organizationId: c.orgId,
+          invoiceId: invoice.id,
+          amountMinor,
+          submittedBy: c.userId,
+        },
       });
       await tx.subscriptionEvent.create({
         data: {
@@ -222,6 +233,37 @@ export class PlatformController {
       },
     };
   }
+  @Post('organizations/:id/sms-credit')
+  async topUpSms(@Actor() c: Context, @Param('id') organizationId: string, @Body() body: unknown) {
+    const v = parse(
+      z.object({
+        amount: z.number().int().min(1).max(10000000),
+        reference: z.string().trim().min(1).max(120),
+      }),
+      body,
+    );
+    return this.db.serial(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${organizationId} FOR UPDATE`;
+      await tx.organization.findUniqueOrThrow({ where: { id: organizationId } });
+      const existing = await tx.smsCreditEntry.findUnique({
+        where: { organizationId_reference: { organizationId, reference: v.reference } },
+      });
+      if (existing) {
+        if (existing.amount !== v.amount)
+          throw new BadRequestException('Reference already used with a different amount');
+        return existing;
+      }
+      return tx.smsCreditEntry.create({
+        data: {
+          organizationId,
+          amount: v.amount,
+          reference: v.reference,
+          actorId: c.userId,
+          kind: 'TOP_UP',
+        },
+      });
+    });
+  }
   @Get('organizations/:id')
   async detail(@Param('id') organizationId: string) {
     const [organization, usage, events] = await Promise.all([
@@ -286,6 +328,28 @@ export class PlatformController {
           actorId: c.userId,
           action: `ORGANIZATION_${v.status}`,
           meta: { reason: v.reason },
+        },
+      });
+      return org;
+    });
+  }
+  @Patch('organizations/:id/website')
+  async websiteAccess(
+    @Actor() c: Context,
+    @Param('id') organizationId: string,
+    @Body() body: unknown,
+  ) {
+    const v = parse(z.object({ enabled: z.boolean() }), body);
+    return this.db.$transaction(async (tx) => {
+      const org = await tx.organization.update({
+        where: { id: organizationId },
+        data: { websiteEnabled: v.enabled },
+      });
+      await tx.subscriptionEvent.create({
+        data: {
+          organizationId,
+          actorId: c.userId,
+          action: v.enabled ? 'WEBSITE_ENABLED' : 'WEBSITE_DISABLED',
         },
       });
       return org;

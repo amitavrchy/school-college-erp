@@ -31,7 +31,7 @@ export class Notifier {
     if (!result.id) throw new Error('SMS response missing message ID');
     return { provider: 'http' as const, id: result.id };
   }
-  async email(to: string, subject: string, text: string) {
+  async email(to: string, subject: string, text: string, idempotencyKey?: string) {
     if (config.EMAIL_PROVIDER === 'console') {
       if (config.NODE_ENV !== 'production') this.log.log(`Email to ${to}: ${subject}\n${text}`);
       return { provider: 'console', id: null };
@@ -43,6 +43,7 @@ export class Notifier {
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${config.EMAIL_API_KEY}`,
+        ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
       },
       body: JSON.stringify({ from: config.EMAIL_FROM, to, subject, text }),
       signal: AbortSignal.timeout(10000),

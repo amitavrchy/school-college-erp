@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { useI18n, LocaleSwitch } from '@/components/i18n';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, Eye, EyeOff, ShieldCheck } from 'lucide-react';
@@ -7,6 +8,7 @@ import { post } from '@/lib/api';
 import { Button } from '@/components/ui';
 import { CampusArt } from '@/components/campus-art';
 export default function Login() {
+  const { t } = useI18n();
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [info, setInfo] = useState(''),
@@ -60,8 +62,8 @@ export default function Login() {
       const result = await post('auth/codes', { purpose: 'PASSWORD_RESET', contact: value });
       setContact(value);
       setInfo(
-        'If an account uses this email or mobile number, a 6-digit code is on its way.' +
-          (result.debugCode ? ` (Test code: ${result.debugCode})` : ''),
+        t('If an account uses this email or mobile number, a 6-digit code is on its way.') +
+          (result.debugCode ? ` (${t('Test code')}: ${result.debugCode})` : ''),
       );
       setMode('reset');
     });
@@ -75,7 +77,7 @@ export default function Login() {
         code: fd.get('code'),
         password: fd.get('password'),
       });
-      setInfo('Your password has been changed. Sign in with the new password.');
+      setInfo(t('Your password has been changed. Sign in with the new password.'));
       setMode('login');
     });
   }
@@ -94,7 +96,7 @@ export default function Login() {
       <img src="/brand.svg" alt="" />
       <div>
         <strong>campusone</strong>
-        <span>School & College ERP</span>
+        <span>{t('School & College ERP')}</span>
       </div>
     </div>
   );
@@ -103,32 +105,37 @@ export default function Login() {
       <section className="login-story">
         {brand}
         <div>
-          <div className="eyebrow">A LITTLE MORE CONNECTED. A LOT MORE POSSIBLE.</div>
+          <div className="eyebrow">{t('A LITTLE MORE CONNECTED. A LOT MORE POSSIBLE.')}</div>
           <h1>
-            A brighter campus.
-            <br />A better every day.
+            {t('A brighter campus.')}
+            <br />
+            {t('A better every day.')}
           </h1>
           <p>
-            Bring your students, teachers, and families together. Everything your school needs, in
-            one thoughtful workspace.
+            {t(
+              'Bring your students, teachers, and families together. Everything your school needs, in one thoughtful workspace.',
+            )}
           </p>
           <CampusArt className="login-illustration" />
         </div>
-        <p>Built for Bangladesh. Made for your community.</p>
+        <p>{t('Built for Bangladesh. Made for your community.')}</p>
       </section>
       <main className="login-form-wrap">
         <div className="login-form">
+          <LocaleSwitch />
           {brand}
-          <div className="eyebrow">WELCOME TO YOUR WORKSPACE</div>
+          <div className="eyebrow">{t('WELCOME TO YOUR WORKSPACE')}</div>
           {mode === 'mfa' ? (
             <>
-              <h1>Two-step sign-in</h1>
+              <h1>{t('Two-step sign-in')}</h1>
               <p>
-                Enter the 6-digit code from your authenticator app, or one of your recovery codes.
+                {t(
+                  'Enter the 6-digit code from your authenticator app, or one of your recovery codes.',
+                )}
               </p>
               <form onSubmit={verify}>
                 <label>
-                  Authentication code
+                  {t('Authentication code')}
                   <input
                     name="code"
                     autoComplete="one-time-code"
@@ -141,38 +148,42 @@ export default function Login() {
                 </label>
                 {alert}
                 <Button type="submit" busy={busy}>
-                  Verify and continue <ArrowRight size={17} />
+                  {t('Verify and continue')} <ArrowRight size={17} />
                 </Button>
                 <button type="button" className="link-button" onClick={() => setMode('login')}>
-                  Back to sign in
+                  {t('Back to sign in')}
                 </button>
               </form>
             </>
           ) : mode === 'forgot' ? (
             <>
-              <h1>Reset your password</h1>
-              <p>Enter the email or mobile number on your account. We will send a one-time code.</p>
+              <h1>{t('Reset your password')}</h1>
+              <p>
+                {t(
+                  'Enter the email or mobile number on your account. We will send a one-time code.',
+                )}
+              </p>
               <form onSubmit={requestReset}>
                 <label>
-                  Email or mobile number
+                  {t('Email or mobile number')}
                   <input name="contact" required autoComplete="username" autoFocus />
                 </label>
                 {alert}
                 <Button type="submit" busy={busy}>
-                  Send code <ArrowRight size={17} />
+                  {t('Send code')} <ArrowRight size={17} />
                 </Button>
                 <button type="button" className="link-button" onClick={() => setMode('login')}>
-                  Back to sign in
+                  {t('Back to sign in')}
                 </button>
               </form>
             </>
           ) : mode === 'reset' ? (
             <>
-              <h1>Choose a new password</h1>
+              <h1>{t('Choose a new password')}</h1>
               {status}
               <form onSubmit={reset}>
                 <label>
-                  6-digit code
+                  {t('6-digit code')}
                   <input
                     name="code"
                     inputMode="numeric"
@@ -184,7 +195,7 @@ export default function Login() {
                   />
                 </label>
                 <label>
-                  New password
+                  {t('New password')}
                   <input
                     name="password"
                     type="password"
@@ -192,26 +203,26 @@ export default function Login() {
                     minLength={12}
                     maxLength={100}
                     required
-                    placeholder="At least 12 characters"
+                    placeholder={t('At least 12 characters')}
                   />
                 </label>
                 {alert}
                 <Button type="submit" busy={busy}>
-                  Change password <ArrowRight size={17} />
+                  {t('Change password')} <ArrowRight size={17} />
                 </Button>
                 <button type="button" className="link-button" onClick={() => setMode('forgot')}>
-                  Send a new code
+                  {t('Send a new code')}
                 </button>
               </form>
             </>
           ) : (
             <>
-              <h1>Good to see you again.</h1>
-              <p>Sign in to keep your campus moving forward.</p>
+              <h1>{t('Good to see you again.')}</h1>
+              <p>{t('Sign in to keep your campus moving forward.')}</p>
               {status}
               <form onSubmit={submit}>
                 <label>
-                  Email address
+                  {t('Email address')}
                   <input
                     name="email"
                     type="email"
@@ -221,19 +232,19 @@ export default function Login() {
                   />
                 </label>
                 <label>
-                  Password
+                  {t('Password')}
                   <div className="password-field">
                     <input
                       name="password"
                       type={show ? 'text' : 'password'}
                       autoComplete="current-password"
-                      placeholder="Enter your password"
+                      placeholder={t('Enter your password')}
                       required
                     />
                     <button
                       type="button"
                       className="icon-button"
-                      aria-label={show ? 'Hide password' : 'Show password'}
+                      aria-label={show ? t('Hide password') : t('Show password')}
                       onClick={() => setShow(!show)}
                     >
                       {show ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -242,7 +253,7 @@ export default function Login() {
                 </label>
                 {alert}
                 <Button type="submit" busy={busy}>
-                  Sign in to Campus One <ArrowRight size={17} />
+                  {t('Sign in to Campus One')} <ArrowRight size={17} />
                 </Button>
                 <button
                   type="button"
@@ -253,17 +264,17 @@ export default function Login() {
                     setMode('forgot');
                   }}
                 >
-                  Forgot your password?
+                  {t('Forgot your password?')}
                 </button>
               </form>
             </>
           )}
           <p className="form-foot">
-            New to our campus? <Link href="/apply">Apply for admission</Link>
+            {t('New to our campus?')} <Link href="/apply">{t('Apply for admission')}</Link>
           </p>
           <p className="form-foot">
             <ShieldCheck size={15} style={{ verticalAlign: 'middle', marginRight: 5 }} />
-            Secure access for your school community
+            {t('Secure access for your school community')}
           </p>
         </div>
       </main>

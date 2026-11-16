@@ -10,7 +10,31 @@ class Store {
   final SharedPreferences _prefs;
   static const _secure = FlutterSecureStorage();
 
-  static Future<Store> open() async => Store(await SharedPreferences.getInstance());
+  static Future<Store> open() async {
+    final store = Store(await SharedPreferences.getInstance());
+    await store.migrateTokens();
+    return store;
+  }
+
+  /// Move legacy preference tokens only after the secure write succeeds.
+  Future<void> migrateTokens() async {
+    for (final entry in {
+      'access_token': ['access_token', 'accessToken'],
+      'refresh_token': ['refresh_token', 'refreshToken'],
+    }.entries) {
+      for (final legacyKey in entry.value) {
+        final value = _prefs.getString(legacyKey);
+        if (value == null) continue;
+        if (await _secure.read(key: entry.key) == null) {
+          await _secure.write(key: entry.key, value: value);
+        }
+        await _prefs.remove(legacyKey);
+      }
+    }
+  }
+
+  Future<String?> get accessToken => _secure.read(key: 'access_token');
+  Future<void> setAccessToken(String? value) => write('access_token', value);
 
   String? get language => _prefs.getString('language');
   Future<void> setLanguage(String code) => _prefs.setString('language', code);
@@ -21,14 +45,15 @@ class Store {
       : _secure.write(key: 'refresh_token', value: value);
 
   Future<String?> read(String key) => _secure.read(key: key);
-  Future<void> write(String key, String? value) =>
-      value == null ? _secure.delete(key: key) : _secure.write(key: key, value: value);
+  Future<void> write(String key, String? value) => value == null
+      ? _secure.delete(key: key)
+      : _secure.write(key: key, value: value);
 
   /// Saves a response for offline reading, with the time it was fetched.
   Future<void> cache(String key, Object? data) => _secure.write(
-        key: 'cache:$key',
-        value: jsonEncode({'at': DateTime.now().toIso8601String(), 'data': data}),
-      );
+    key: 'cache:$key',
+    value: jsonEncode({'at': DateTime.now().toIso8601String(), 'data': data}),
+  );
 
   Future<({DateTime at, dynamic data})?> cached(String key) async {
     final raw = await _secure.read(key: 'cache:$key');

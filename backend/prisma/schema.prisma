@@ -26,6 +26,7 @@ model SubscriptionPlan {
   active Boolean @default(true)
   subscriptions Subscription[]
   payments SubscriptionPayment[]
+  invoices SubscriptionInvoice[]
 }
 model Subscription {
   id String @id @default(cuid())
@@ -50,6 +51,8 @@ model SubscriptionPayment {
   method String
   reference String
   senderPhone String?
+  invoiceId String?
+  invoice SubscriptionInvoice? @relation(fields: [invoiceId], references: [id])
   status String @default("PENDING")
   submittedBy String
   reviewedBy String?
@@ -58,6 +61,31 @@ model SubscriptionPayment {
   createdAt DateTime @default(now())
   @@unique([method, reference])
   @@index([organizationId, createdAt])
+}
+model SubscriptionInvoice {
+  id String @id @default(cuid())
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id])
+  planId String
+  plan SubscriptionPlan @relation(fields: [planId], references: [id])
+  period String
+  dueDate DateTime
+  amountMinor Int
+  status String @default("OPEN")
+  createdAt DateTime @default(now())
+  payments SubscriptionPayment[]
+  @@unique([organizationId, dueDate, planId, period])
+  @@index([organizationId, createdAt])
+}
+model SubscriptionReminder {
+  id String @id @default(cuid())
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id])
+  periodEnd DateTime
+  kind String
+  userId String
+  sentAt DateTime @default(now())
+  @@unique([organizationId, periodEnd, kind, userId])
 }
 model SubscriptionEvent {
   id String @id @default(cuid())
@@ -288,14 +316,19 @@ model Organization {
   status String @default("ACTIVE")
   supportEmail String?
   accentColor String @default("#22644f")
+  websiteEnabled Boolean @default(false)
+  setupDismissedAt DateTime?
   createdAt DateTime @default(now())
   members OrganizationMember[]
   subscription Subscription?
   subscriptionPayments SubscriptionPayment[]
+  subscriptionInvoices SubscriptionInvoice[]
+  subscriptionReminders SubscriptionReminder[]
   subscriptionEvents SubscriptionEvent[]
   tickets SupportTicket[]
   website SchoolWebsite?
   settings OrganizationSettings?
+  smsCredits SmsCreditEntry[]
 }
 /// School policy and branding. Defaults match the previous environment-wide behaviour.
 model OrganizationSettings {
@@ -779,6 +812,20 @@ model Notice {
   createdAt DateTime @default(now())
   messages SmsMessage[]
   @@index([status, scheduledAt])
+}
+model SmsCreditEntry {
+  id String @id @default(cuid())
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id])
+  amount Int
+  kind String
+  reference String?
+  actorId String?
+  messageId String?
+  createdAt DateTime @default(now())
+  @@unique([organizationId, reference])
+  @@index([organizationId, createdAt])
+  @@index([messageId])
 }
 model SmsMessage {
   id String @id @default(cuid())

@@ -55,6 +55,9 @@ android {
 
     buildTypes {
         release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             // Without key.properties the release build falls back to debug keys (local testing only;
             // Google Play rejects it).
             signingConfig =

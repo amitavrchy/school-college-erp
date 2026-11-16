@@ -24,9 +24,9 @@ mobile number; with `OTP_DEBUG=true` on the API the code is printed in the API l
    - `APP_NAME`, `APP_NAME_BN` — store and launcher name
    - `API_URL` — production API, e.g. `https://api.example.com/api`
    - `ACCENT` — the school's colour
-   - `ANDROID_APP_ID` — unique and permanent, e.g. `com.campusone.dhakamodel`
+   - `ANDROID_APP_ID` and `APP_ID_IOS` — unique and permanent, e.g. `com.campusone.dhakamodel`
 3. Launcher icon: put the school's 1024×1024 PNG at `schools/<slug>/icon.png` and run
-   `dart run flutter_launcher_icons` with that path (to be scripted).
+   the build scripts generate platform icons from that file.
 4. Build: `scripts/build-school.sh <slug>` → `build/app/outputs/bundle/release/app-release.aab`.
 5. Create the app in Google Play Console under the school's name, upload the bundle to Internal
    testing first, then Production.
@@ -70,3 +70,27 @@ Until then the app works without push (`NoPush`).
 flutter analyze
 flutter test
 ```
+
+## Release builds
+
+The `schools/scholars.json` profile uses the production API. Release builds require HTTPS;
+`demo.json` is only for local debugging. The Android script requires the existing upload key
+configuration described above, regenerates both platforms' icons from
+`schools/<slug>/icon.png` (1024×1024 PNG) when present, and otherwise uses the Campus One icon.
+Native icon files change when switching schools; regenerate them before every release.
+
+```sh
+flutter pub get
+flutter analyze
+flutter test
+# Android, with android/key.properties pointing to an existing external keystore:
+scripts/build-school.sh scholars appbundle
+# iOS, unsigned, with the school bundle identifier and display name:
+scripts/build-ios-school.sh scholars
+```
+
+The iOS app uses the school profile's `APP_ID_IOS`; the iOS script writes a temporary local
+Xcode configuration and does not modify signing teams. Configure signing in Xcode separately
+for distribution. Review the privacy manifest and App Store privacy declarations with the
+school and legal counsel before submission. Firebase push is disabled until configured.
+Increment `version: name+build` in `pubspec.yaml` for each store submission.

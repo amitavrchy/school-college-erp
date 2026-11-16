@@ -677,6 +677,9 @@ export default function Landing() {
               <a href="#school-day">The school day</a>
               <a href="#pricing">Pricing</a>
               <a href="#questions">Questions</a>
+              <Link href="/privacy">Privacy</Link>
+              <Link href="/terms">Terms</Link>
+              <Link href="/refund-policy">Refund policy</Link>
               <Link href="/login">
                 Workspace login <ArrowUpRight size={15} />
               </Link>

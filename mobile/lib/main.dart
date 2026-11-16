@@ -7,17 +7,23 @@ import 'core/providers.dart';
 import 'core/push.dart';
 import 'core/school.dart';
 import 'core/store.dart';
+import 'core/update_gate.dart';
 import 'l10n/app_localizations.dart';
 import 'router.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Future.wait([initializeDateFormatting('bn'), initializeDateFormatting('en')]);
+  await Future.wait([
+    initializeDateFormatting('bn'),
+    initializeDateFormatting('en'),
+  ]);
   final store = await Store.open();
-  runApp(ProviderScope(
-    overrides: [storeProvider.overrideWithValue(store)],
-    child: const CampusApp(),
-  ));
+  runApp(
+    ProviderScope(
+      overrides: [storeProvider.overrideWithValue(store)],
+      child: const CampusApp(),
+    ),
+  );
 }
 
 class CampusApp extends ConsumerWidget {
@@ -27,15 +33,20 @@ class CampusApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Registers this phone for push once signed in (no-op until Firebase is configured).
     ref.listen(sessionProvider, (_, session) {
-      if (session.status == SessionStatus.signedIn) ref.read(pushProvider).register(ref);
+      if (session.status == SessionStatus.signedIn) {
+        ref.read(pushProvider).register(ref);
+      }
     });
     final locale = ref.watch(localeProvider);
     ThemeData theme(Brightness b) => ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: School.accent, brightness: b),
-          useMaterial3: true,
-          // Bangla glyphs come from the bundled Noto Sans Bengali; Latin from the system font.
-          fontFamilyFallback: const ['NotoSansBengali'],
-        );
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: School.accent,
+        brightness: b,
+      ),
+      useMaterial3: true,
+      // Bangla glyphs come from the bundled Noto Sans Bengali; Latin from the system font.
+      fontFamilyFallback: const ['NotoSansBengali'],
+    );
     return MaterialApp.router(
       title: School.name,
       debugShowCheckedModeBanner: false,
@@ -50,6 +61,8 @@ class CampusApp extends ConsumerWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       routerConfig: ref.watch(routerProvider),
+      builder: (context, child) =>
+          UpdateGate(child: child ?? const SizedBox.shrink()),
     );
   }
 }

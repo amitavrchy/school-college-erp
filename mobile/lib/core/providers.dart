@@ -22,7 +22,9 @@ class LocaleNotifier extends Notifier<Locale?> {
   }
 }
 
-final localeProvider = NotifierProvider<LocaleNotifier, Locale?>(LocaleNotifier.new);
+final localeProvider = NotifierProvider<LocaleNotifier, Locale?>(
+  LocaleNotifier.new,
+);
 
 enum SessionStatus { loading, signedOut, signedIn }
 
@@ -33,9 +35,9 @@ class Session {
   final String? campusId;
 
   List<String> get roles => [
-        for (final r in (me?['roles'] as List? ?? const []))
-          if (r['campusId'] == campusId) r['role'] as String,
-      ];
+    for (final r in (me?['roles'] as List? ?? const []))
+      if (r['campusId'] == campusId) r['role'] as String,
+  ];
   bool get isFamily => roles.any((r) => r == 'GUARDIAN' || r == 'STUDENT');
   String get fullName => (me?['fullName'] as String?) ?? '';
 }
@@ -57,56 +59,93 @@ class SessionNotifier extends Notifier<Session> {
   }
 
   Future<void> restore() async {
-    if (await _store.refreshToken == null || !await _api.renew()) {
+    if (await _store.refreshToken == null) {
       state = const Session(SessionStatus.signedOut);
       return;
     }
-    await _load(await _store.read('campus_id'));
+    _api.accessToken = await _store.accessToken;
+    final campus = await _store.read('campus_id');
+    final renewal = await _api.renew();
+    if (renewal == Renewal.rejected) {
+      await _store.clearAccount();
+      _api.accessToken = null;
+      state = const Session(SessionStatus.signedOut);
+    } else if (renewal == Renewal.temporaryFailure) {
+      await _restoreCached(campus);
+    } else {
+      await _load(campus);
+    }
   }
 
   Future<void> _load(String? preferredCampus) async {
     try {
       _api.campusId = preferredCampus;
       final me = Map<String, dynamic>.from(await _api.get('/auth/me') as Map);
-      final campuses = [for (final r in (me['roles'] as List)) r['campusId'] as String];
-      final campus = campuses.contains(preferredCampus) ? preferredCampus : campuses.firstOrNull;
+      final campuses = [
+        for (final r in (me['roles'] as List)) r['campusId'] as String,
+      ];
+      final campus = campuses.contains(preferredCampus)
+          ? preferredCampus
+          : campuses.firstOrNull;
       _api.campusId = campus;
       await _store.write('campus_id', campus);
+      await _store.cache('session_me', me);
       state = Session(SessionStatus.signedIn, me: me, campusId: campus);
     } on ApiException catch (e) {
       // Offline at start: stay signed in and let screens show cached data.
-      if (e.offline) {
-        state = Session(SessionStatus.signedIn, campusId: preferredCampus);
-      } else {
-        state = const Session(SessionStatus.signedOut);
+      if (e.status != 401) {
+        await _restoreCached(preferredCampus);
       }
+      // A 401 is handled by onSessionEnded after refresh is rejected.
     }
   }
 
-  Future<void> requestCode(String phone) => _api.post(
-        '/auth/codes',
-        {'purpose': 'GUARDIAN_LOGIN', 'contact': phone, 'school': School.slug},
-        false,
-      );
+  Future<void> _restoreCached(String? campus) async {
+    _api.campusId = campus;
+    final cached = await _store.cached('session_me');
+    state = Session(
+      SessionStatus.signedIn,
+      me: cached == null ? null : Map<String, dynamic>.from(cached.data as Map),
+      campusId: campus,
+    );
+  }
+
+  Future<void> requestCode(String phone) => _api.post('/auth/codes', {
+    'purpose': 'GUARDIAN_LOGIN',
+    'contact': phone,
+    'school': School.slug,
+  }, false);
 
   Future<void> signInWithCode(String phone, String code) async {
-    final tokens = await _api.post('/auth/token/otp',
-        {'school': School.slug, 'contact': phone, 'code': code, 'deviceName': 'Android phone'}, false);
+    final tokens = await _api.post('/auth/token/otp', {
+      'school': School.slug,
+      'contact': phone,
+      'code': code,
+      'deviceName': 'Android phone',
+    }, false);
     await _finish(Map<String, dynamic>.from(tokens as Map));
   }
 
   /// Returns a two-step challenge when the account has an authenticator app, else signs in.
   Future<String?> signInWithPassword(String email, String password) async {
-    final result = Map<String, dynamic>.from(await _api.post('/auth/token',
-        {'school': School.slug, 'email': email, 'password': password, 'deviceName': 'Android phone'},
-        false) as Map);
+    final result = Map<String, dynamic>.from(
+      await _api.post('/auth/token', {
+        'school': School.slug,
+        'email': email,
+        'password': password,
+        'deviceName': 'Android phone',
+      }, false) as Map,
+    );
     if (result['mfaRequired'] == true) return result['challenge'] as String;
     await _finish(result);
     return null;
   }
 
   Future<void> signInWithMfa(String challenge, String code) async {
-    final tokens = await _api.post('/auth/token/mfa', {'challenge': challenge, 'code': code}, false);
+    final tokens = await _api.post('/auth/token/mfa', {
+      'challenge': challenge,
+      'code': code,
+    }, false);
     await _finish(Map<String, dynamic>.from(tokens as Map));
   }
 
@@ -134,7 +173,9 @@ class SessionNotifier extends Notifier<Session> {
   }
 }
 
-final sessionProvider = NotifierProvider<SessionNotifier, Session>(SessionNotifier.new);
+final sessionProvider = NotifierProvider<SessionNotifier, Session>(
+  SessionNotifier.new,
+);
 
 /// The child whose data the family screens show.
 class SelectedStudent extends Notifier<String?> {
@@ -152,7 +193,9 @@ class SelectedStudent extends Notifier<String?> {
   }
 }
 
-final selectedStudentProvider = NotifierProvider<SelectedStudent, String?>(SelectedStudent.new);
+final selectedStudentProvider = NotifierProvider<SelectedStudent, String?>(
+  SelectedStudent.new,
+);
 
 /// API data with an offline fallback: the last good response is kept in secure storage.
 class Loaded<T> {
@@ -163,35 +206,58 @@ class Loaded<T> {
 }
 
 Future<Loaded<dynamic>> cachedGet(Ref ref, String key, String path) async {
+  final campusId = ref.read(apiProvider).campusId;
+  final cacheKey = '$campusId:$key';
   final api = ref.read(apiProvider);
   final store = ref.read(storeProvider);
   try {
     final data = await api.get(path);
-    await store.cache(key, data);
+    await store.cache(cacheKey, data);
     return Loaded(data);
   } on ApiException catch (e) {
-    if (!e.offline) rethrow;
-    final saved = await store.cached(key);
+    if (!e.offline && e.status < 500) rethrow;
+    final saved = await store.cached(cacheKey);
     if (saved == null) rethrow;
     return Loaded(saved.data, savedAt: saved.at);
   }
 }
 
-final dashboardProvider = FutureProvider.autoDispose<Loaded<dynamic>>(
-    (ref) => cachedGet(ref, 'dashboard', '/guardians/me/dashboard'));
-final noticesProvider =
-    FutureProvider.autoDispose<Loaded<dynamic>>((ref) => cachedGet(ref, 'notices', '/notices'));
-final invoicesProvider = FutureProvider.autoDispose<Loaded<dynamic>>(
-    (ref) => cachedGet(ref, 'invoices', '/fees/invoices'));
-final paymentsProvider = FutureProvider.autoDispose<Loaded<dynamic>>(
-    (ref) => cachedGet(ref, 'payments', '/payments'));
-final resultsProvider = FutureProvider.autoDispose.family<Loaded<dynamic>, String>(
-    (ref, studentId) => cachedGet(ref, 'results:$studentId', '/exams/results/$studentId'));
+final dashboardProvider = FutureProvider.autoDispose<Loaded<dynamic>>((ref) {
+  ref.watch(sessionProvider);
+  return cachedGet(ref, 'dashboard', '/guardians/me/dashboard');
+});
+final noticesProvider = FutureProvider.autoDispose<Loaded<dynamic>>((ref) {
+  ref.watch(sessionProvider);
+  return cachedGet(ref, 'notices', '/notices');
+});
+final invoicesProvider = FutureProvider.autoDispose<Loaded<dynamic>>((ref) {
+  ref.watch(sessionProvider);
+  return cachedGet(ref, 'invoices', '/fees/invoices');
+});
+final paymentsProvider = FutureProvider.autoDispose<Loaded<dynamic>>((ref) {
+  ref.watch(sessionProvider);
+  return cachedGet(ref, 'payments', '/payments');
+});
+final resultsProvider = FutureProvider.autoDispose
+    .family<Loaded<dynamic>, String>((ref, studentId) {
+      ref.watch(sessionProvider);
+      return cachedGet(ref, 'results:$studentId', '/exams/results/$studentId');
+    });
 final appConfigProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
+  final store = ref.read(storeProvider);
   try {
-    return Map<String, dynamic>.from(
-        await ref.read(apiProvider).get('/app/config', query: {'school': School.slug}) as Map);
+    final config = Map<String, dynamic>.from(
+      await ref
+              .read(apiProvider)
+              .get('/app/config', query: {'school': School.slug}, auth: false)
+          as Map,
+    );
+    await store.cache('app_config', config);
+    return config;
   } catch (_) {
-    return null;
+    final cached = await store.cached('app_config');
+    return cached == null
+        ? null
+        : Map<String, dynamic>.from(cached.data as Map);
   }
 });

@@ -64,6 +64,60 @@ test(
     }
     const a = await institution('a'),
       b = await institution('b');
+    const platform = await request('auth/login', {
+      email: process.env.PLATFORM_ADMIN_EMAIL || 'platform@campusone.edu.bd',
+      password: process.env.PLATFORM_SEED_PASSWORD || process.env.SEED_PASSWORD || 'CampusOne!2026',
+    });
+    assert.equal(platform.status, 201);
+    assert.equal(a.organization.websiteEnabled, false);
+    assert.equal((await request('website', undefined, a.cookie, a.campus.id)).status, 404);
+    assert.equal(
+      (await request('website', { subdomain: a.slug }, a.cookie, a.campus.id)).status,
+      404,
+    );
+    assert.equal(
+      (
+        await request(
+          `platform/organizations/${a.organization.id}/website`,
+          { enabled: true },
+          a.cookie,
+          a.campus.id,
+          'PATCH',
+        )
+      ).status,
+      403,
+    );
+    assert.equal(
+      (
+        await request(
+          'saas/organization',
+          { name: 'CMS A Academy', accentColor: '#22644f', websiteEnabled: true },
+          a.cookie,
+          a.campus.id,
+          'PATCH',
+        )
+      ).status,
+      200,
+    );
+    assert.equal(
+      (await db.organization.findUniqueOrThrow({ where: { id: a.organization.id } }))
+        .websiteEnabled,
+      false,
+    );
+    for (const org of [a, b]) {
+      assert.equal(
+        (
+          await request(
+            `platform/organizations/${org.organization.id}/website`,
+            { enabled: true },
+            platform.cookie,
+            '',
+            'PATCH',
+          )
+        ).status,
+        200,
+      );
+    }
     const auth = (path: string, body?: unknown, method?: string) =>
       request(path, body, a.cookie, a.campus.id, method);
     let draft: any,
@@ -427,6 +481,84 @@ test(
       },
     );
     await t.test(
+      'disabling hides every website surface and re-enabling preserves content',
+      async () => {
+        const asset = await db.websiteAsset.findFirst({
+          where: { website: { organizationId: a.organization.id } },
+        });
+        assert.equal(
+          (
+            await request(
+              `platform/organizations/${a.organization.id}/website`,
+              { enabled: false },
+              platform.cookie,
+              '',
+              'PATCH',
+            )
+          ).status,
+          200,
+        );
+        for (const path of [
+          'website',
+          'website/inquiries',
+          `public-websites/${a.slug}`,
+          `public-websites/${a.slug}?preview=${preview}`,
+          `public-websites/${a.slug}/results/options`,
+          `public-websites/${a.slug}/results/report?token=${resultToken}`,
+          `public-websites/resolve?host=${a.slug}.localhost`,
+          `public-websites/tls-authorization?domain=${a.slug}.localhost`,
+        ]) {
+          assert.equal((await request(path, undefined, a.cookie, a.campus.id)).status, 404, path);
+        }
+        assert.ok(asset);
+        assert.equal((await request(`public-websites/media/${asset.id}`)).status, 404);
+        assert.equal(
+          (
+            await request(`public-websites/${a.slug}/results`, {
+              termId: 'x',
+              sectionId: 'x',
+              rollNumber: '1',
+            })
+          ).status,
+          404,
+        );
+        assert.equal((await auth('website/unpublish', {})).status, 404);
+        assert.equal(
+          (
+            await request(`public-websites/${a.slug}/inquiries`, {
+              name: 'Test Parent',
+              email: 'parent@example.test',
+              message: 'Please send more information.',
+            })
+          ).status,
+          404,
+        );
+        assert.equal(
+          (
+            await request(
+              `platform/organizations/${a.organization.id}/website`,
+              { enabled: true },
+              platform.cookie,
+              '',
+              'PATCH',
+            )
+          ).status,
+          200,
+        );
+        assert.equal((await request(`public-websites/${a.slug}`)).status, 200);
+        assert.equal((await auth('website')).status, 200);
+        assert.equal(
+          await db.subscriptionEvent.count({
+            where: {
+              organizationId: a.organization.id,
+              action: { in: ['WEBSITE_ENABLED', 'WEBSITE_DISABLED'] },
+            },
+          }),
+          3,
+        );
+      },
+    );
+    await t.test(
       'enquiries stay private and suspended institutions disappear from public routing',
       async () => {
         const input = {
@@ -467,7 +599,7 @@ test(
         );
         await db.subscription.update({
           where: { organizationId: a.organization.id },
-          data: { currentPeriodEnd: new Date(Date.now() - 1000) },
+          data: { currentPeriodEnd: new Date(Date.now() - 8 * 86400000) },
         });
         assert.equal(
           (await auth('website/draft', { revision: rev, content: draft }, 'PATCH')).status,

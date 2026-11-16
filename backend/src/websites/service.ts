@@ -173,7 +173,11 @@ export class Websites {
               include: { website: { include: { organization: true } } },
             })
           )?.website;
-    if (!site?.published || site.organization.status !== 'ACTIVE')
+    if (
+      !site?.published ||
+      site.organization.status !== 'ACTIVE' ||
+      !site.organization.websiteEnabled
+    )
       throw new NotFoundException('School website not found');
     return { subdomain: site.subdomain };
   }
@@ -185,7 +189,7 @@ export class Websites {
         domains: { where: { status: 'VERIFIED' }, orderBy: { hostname: 'asc' } },
       },
     });
-    if (!site || site.organization.status !== 'ACTIVE')
+    if (!site || site.organization.status !== 'ACTIVE' || !site.organization.websiteEnabled)
       throw new NotFoundException('School website not found');
     let content: WebsiteContent;
     if (preview) {

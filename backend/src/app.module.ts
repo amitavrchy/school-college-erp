@@ -27,6 +27,7 @@ import { ExamsController } from './modules/exams';
 import { DocumentsController } from './modules/documents';
 import { NoticesController } from './modules/notices';
 import { ReportsController } from './modules/reports';
+import { SetupController } from './modules/setup';
 import { LifecycleController } from './modules/lifecycle';
 import { Billing } from './modules/billing';
 import { UploadsController } from './modules/uploads';
@@ -39,7 +40,11 @@ import { SupportController } from './modules/support';
 import { HealthController } from './health';
 import { Websites } from './websites/service';
 import { WebsiteResults } from './websites/results';
-import { WebsiteController, PublicWebsitesController } from './websites/controllers';
+import {
+  WebsiteController,
+  PublicWebsitesController,
+  WebsiteEnabledGuard,
+} from './websites/controllers';
 @Module({
   imports: [
     JwtModule.register({
@@ -67,6 +72,7 @@ import { WebsiteController, PublicWebsitesController } from './websites/controll
     DocumentsController,
     NoticesController,
     ReportsController,
+    SetupController,
     LifecycleController,
     UploadsController,
     SaasController,
@@ -80,6 +86,7 @@ import { WebsiteController, PublicWebsitesController } from './websites/controll
   providers: [
     Db,
     Websites,
+    WebsiteEnabledGuard,
     WebsiteResults,
     Saas,
     Audit,

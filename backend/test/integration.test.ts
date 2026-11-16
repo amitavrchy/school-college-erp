@@ -160,6 +160,7 @@ test(
       });
       await db.receiptCounter.deleteMany({ where: { campusId: { in: campusIds } } });
       await db.organizationSettings.deleteMany({ where: { organizationId: org.id } });
+      await db.smsCreditEntry.deleteMany({ where: { organizationId: org.id } });
       await db.paymentAllocation.deleteMany({
         where: { payment: { studentId: { in: studentIds } } },
       });
@@ -192,10 +193,76 @@ test(
       await db.organizationMember.deleteMany({ where: { organizationId: org.id } });
       await db.subscriptionEvent.deleteMany({ where: { organizationId: org.id } });
       await db.subscriptionPayment.deleteMany({ where: { organizationId: org.id } });
+      await db.subscriptionInvoice.deleteMany({ where: { organizationId: org.id } });
+      await db.subscriptionReminder.deleteMany({ where: { organizationId: org.id } });
       await db.subscription.deleteMany({ where: { organizationId: org.id } });
       await db.organization.delete({ where: { id: org.id } });
       await db.$disconnect();
     });
+    await t.test('SMS credit endpoints enforce platform and school admin access', async () => {
+      assert.equal((await request('teacher', a.id, 'settings/sms-credit')).status, 403);
+      assert.equal((await request('teacher', a.id, 'notices/sms/retry', {})).status, 403);
+      assert.equal(
+        (
+          await request('admin', a.id, `platform/organizations/${org.id}/sms-credit`, {
+            amount: 3,
+            reference: 'access-test',
+          })
+        ).status,
+        403,
+      );
+      const login = await fetch(`${base}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: process.env.PLATFORM_ADMIN_EMAIL || 'platform@campusone.edu.bd',
+          password:
+            process.env.PLATFORM_SEED_PASSWORD || process.env.SEED_PASSWORD || 'CampusOne!2026',
+        }),
+      });
+      assert.equal(login.status, 201);
+      const response = await fetch(`${base}/platform/organizations/${org.id}/sms-credit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: login.headers.get('set-cookie')!.split(';')[0],
+        },
+        body: JSON.stringify({ amount: 3, reference: 'access-test' }),
+      });
+      assert.equal(response.status, 201);
+      const credit = await request('admin', b.id, 'settings/sms-credit');
+      assert.equal(credit.status, 200);
+      assert.equal(credit.data.balance, 3);
+      assert.equal(credit.data.history[0].reference, 'access-test');
+    });
+    await t.test(
+      'setup checklist reflects campus data and dismissal is shared only within the organization',
+      async () => {
+        const initial = await request('admin', b.id, 'setup');
+        assert.equal(initial.status, 200);
+        assert.deepEqual(
+          initial.data.steps.map((step: any) => step.done),
+          [true, true, true, false, true, false],
+        );
+        assert.equal(initial.data.dismissed, false);
+        assert.equal((await request('teacher', a.id, 'setup')).status, 403);
+        assert.equal((await request('teacher', a.id, 'setup/dismiss', {})).status, 403);
+        await db.feeStructure.create({
+          data: { sessionId: sessions[1].id, classId: classes[1].id, name: 'Setup fee' },
+        });
+        await db.guardianStudent.create({
+          data: { guardianUserId: 'guardian', studentId: students[1].id },
+        });
+        const complete = await request('admin', b.id, 'setup');
+        assert.ok(complete.data.steps.every((step: any) => step.done));
+        const otherCampus = await request('admin', a.id, 'setup');
+        assert.equal(otherCampus.data.steps.find((step: any) => step.id === 'fees').done, false);
+        assert.equal((await request('admin', b.id, 'setup/dismiss', {})).status, 201);
+        assert.equal((await request('admin', a.id, 'setup')).data.dismissed, true);
+        const otherOrg = await db.organization.findUniqueOrThrow({ where: { id: 'org-scholars' } });
+        assert.equal(otherOrg.setupDismissedAt, null);
+      },
+    );
     await t.test(
       'teacher cannot mark another campus or impersonate campus membership',
       async () => {
@@ -208,6 +275,147 @@ test(
         assert.equal((await request('teacher', b.id, 'students')).status, 403);
       },
     );
+    await t.test('family data and devices are isolated by guardian and campus', async () => {
+      const original = await db.user.findUniqueOrThrow({ where: { id: 'guardian' } });
+      const other = await db.user.create({
+        data: {
+          fullName: 'Other guardian',
+          email: prefix + '@example.com',
+          passwordHash: original.passwordHash,
+        },
+      });
+      const child = await db.student.create({
+        data: {
+          campusId: a.id,
+          studentCode: prefix + '-other',
+          fullName: 'Other child',
+          enrollments: { create: { sessionId: sessions[0].id, sectionId: sections[0].id } },
+          guardians: { create: { guardianUserId: other.id } },
+        },
+        include: { enrollments: true },
+      });
+      await db.organizationMember.create({
+        data: { organizationId: org.id, userId: other.id, role: 'MEMBER' },
+      });
+      await db.userCampusRole.create({
+        data: { userId: other.id, campusId: a.id, role: 'GUARDIAN' },
+      });
+      const payment = await db.payment.create({
+        data: {
+          studentId: child.id,
+          provider: 'MANUAL',
+          status: 'SUCCESS',
+          amountMinor: 100,
+          idempotencyKey: prefix + '-private',
+        },
+      });
+      await db.invoice.create({
+        data: {
+          studentId: child.id,
+          sessionId: sessions[0].id,
+          dueDate: new Date(),
+          totalMinor: 100,
+        },
+      });
+      await db.attendanceRecord.create({
+        data: {
+          enrollmentId: child.enrollments[0].id,
+          markedBy: 'teacher',
+          date: new Date(day),
+          period: 0,
+          status: 'ABSENT',
+        },
+      });
+      const notice = await db.notice.create({
+        data: {
+          campusId: a.id,
+          title: 'Private',
+          body: 'Private notice',
+          status: 'SENT',
+          channels: ['IN_APP'],
+          audience: { studentIds: [child.id], sectionIds: [sections[0].id] },
+        },
+      });
+      const token = prefix + '-device-token-123456789';
+      try {
+        const dashboard = await request('guardian', a.id, 'guardians/me/dashboard');
+        assert.deepEqual(
+          dashboard.data.students.map((s: any) => s.id),
+          [students[0].id],
+        );
+        assert.equal(
+          (await request('guardian', a.id, 'attendance?date=' + day + '&studentId=' + child.id))
+            .data.length,
+          0,
+        );
+        assert.equal((await request('guardian', a.id, 'exams/results/' + child.id)).status, 404);
+        assert.equal(
+          (await request('guardian', a.id, 'students/' + child.id + '/report-card')).status,
+          404,
+        );
+        assert.ok(
+          !(await request('guardian', a.id, 'fees/invoices')).data.some(
+            (i: any) => i.studentId === child.id,
+          ),
+        );
+        assert.ok(
+          !(await request('guardian', a.id, 'payments')).data.some((p: any) => p.id === payment.id),
+        );
+        assert.equal(
+          (await request('guardian', a.id, 'payments/' + payment.id + '/receipt')).status,
+          404,
+        );
+        assert.ok(
+          !(await request('guardian', a.id, 'notices')).data.some((n: any) => n.id === notice.id),
+        );
+        assert.equal((await request('guardian', b.id, 'guardians/me/dashboard')).status, 403);
+        const foreignCampus = await db.campus.findFirstOrThrow({
+          where: { orgId: { not: org.id } },
+        });
+        assert.equal(
+          (await request('guardian', a.id, 'exams/results/' + students[1].id)).status,
+          404,
+        );
+        const device = await request('guardian', a.id, 'devices', {
+          platform: 'android',
+          pushToken: token,
+        });
+        assert.equal(device.status, 201);
+        const login = await fetch(base + '/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: other.email,
+            password: process.env.SEED_PASSWORD || 'CampusOne!2026',
+          }),
+        });
+        assert.equal(login.status, 201);
+        cookies.other = login.headers.get('set-cookie')!.split(';')[0];
+        assert.equal(
+          (await request('other', foreignCampus.id, 'guardians/me/dashboard')).status,
+          403,
+        );
+        assert.equal(
+          (await request('other', a.id, 'devices', { platform: 'android', pushToken: token }))
+            .status,
+          403,
+        );
+        await request('other', a.id, 'devices/' + device.data.id, undefined, 'DELETE');
+        assert.ok(await db.device.findUnique({ where: { pushToken: token } }));
+      } finally {
+        await db.device.deleteMany({ where: { pushToken: token } });
+        await db.notice.delete({ where: { id: notice.id } });
+        await db.payment.delete({ where: { id: payment.id } });
+        await db.invoice.deleteMany({ where: { studentId: child.id } });
+        await db.attendanceRecord.deleteMany({ where: { enrollmentId: child.enrollments[0].id } });
+        await db.guardianStudent.deleteMany({ where: { studentId: child.id } });
+        await db.enrollment.deleteMany({ where: { studentId: child.id } });
+        await db.student.delete({ where: { id: child.id } });
+        await db.userCampusRole.deleteMany({ where: { userId: other.id } });
+        await db.organizationMember.deleteMany({ where: { userId: other.id } });
+        await db.user.delete({ where: { id: other.id } });
+      }
+    });
     await t.test('guardian sees only linked students and published results', async () => {
       const list = await request('guardian', a.id, 'students');
       assert.equal(list.data.total, 1);

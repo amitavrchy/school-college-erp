@@ -20,16 +20,19 @@ export function canTransition(flow: Record<string, string[]>, from: string, to: 
 export function meritScore(test: number, previousGpa: number) {
   return test * 0.8 + (previousGpa / 5) * 100 * 0.2;
 }
+// GSM 03.38 extension characters consume two septets; other characters use UTF-16 units.
 export function smsSegments(text: string) {
-  const unicode = /[^\x00-\x7F]/.test(text);
-  const length = text.length;
+  const basic =
+    '@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !"#¤%&\'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà';
+  const extension = '^{}\\[~]|€\f';
+  const unicode = [...text].some((c) => !basic.includes(c) && !extension.includes(c));
+  const length = unicode
+    ? text.length
+    : [...text].reduce((n, c) => n + (extension.includes(c) ? 2 : 1), 0);
+  const single = unicode ? 70 : 160;
+  const multipart = unicode ? 67 : 153;
   return {
     encoding: unicode ? 'UCS-2' : 'GSM-7',
-    segments: Math.max(
-      1,
-      Math.ceil(
-        length / (length <= (unicode ? 70 : 160) ? (unicode ? 70 : 160) : unicode ? 67 : 153),
-      ),
-    ),
+    segments: Math.max(1, Math.ceil(length / (length <= single ? single : multipart))),
   };
 }

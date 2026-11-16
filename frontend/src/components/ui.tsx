@@ -1,4 +1,5 @@
 'use client';
+import { useI18n } from './i18n';
 import { useData } from '@/lib/use-data';
 import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
 import {
@@ -81,22 +82,23 @@ export function State({
   empty?: boolean;
   onRetry?: () => void;
 }) {
+  const { t } = useI18n();
   if (error)
     return (
       <div className="empty-state" role="alert">
         <AlertCircle />
-        <h3>Something needs attention</h3>
+        <h3>{t('Something needs attention')}</h3>
         <p>{error}</p>
         {onRetry && (
           <Button variant="secondary" onClick={onRetry}>
-            Try again
+            {t('Try again')}
           </Button>
         )}
       </div>
     );
   if (loading)
     return (
-      <div className="skeleton-stack" aria-label="Loading content" aria-busy="true">
+      <div className="skeleton-stack" aria-label={t('Loading content')} aria-busy="true">
         {[1, 2, 3].map((i) => (
           <div className="skeleton" key={i} />
         ))}
@@ -106,8 +108,8 @@ export function State({
     return (
       <div className="empty-state">
         <Search />
-        <h3>No records here yet</h3>
-        <p>Try another filter or add the first record.</p>
+        <h3>{t('No records here yet')}</h3>
+        <p>{t('Try another filter or add the first record.')}</p>
       </div>
     );
   return null;
