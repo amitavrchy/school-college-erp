@@ -135,6 +135,10 @@ export default function Start() {
           <State error={error} />
         ) : (
           <form className="form-grid" onSubmit={submit}>
+            <p>
+              Draft policies: <Link href="/privacy">Privacy</Link> ·{' '}
+              <Link href="/terms">Terms</Link> · <Link href="/refund-policy">Refund policy</Link>
+            </p>
             <div className="onboarding-plan">
               <span>
                 <Sparkles size={18} />
