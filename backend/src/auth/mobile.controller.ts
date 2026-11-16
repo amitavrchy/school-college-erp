@@ -135,6 +135,7 @@ export class MobileController {
       // Raise when an API change would break older app builds; the app then asks to update.
       minimumVersion: '1.0.0',
       active: org.status === 'ACTIVE' && subscriptionUsable(org.subscription),
+      subscriptionPastDue: !!org.subscription && org.subscription.currentPeriodEnd <= new Date(),
       support: { phone: s?.phone ?? null, email: s?.email ?? org.supportEmail ?? null },
     };
   }

@@ -26,7 +26,16 @@ test('subscription expiry and end-of-month renewals have precise boundaries', ()
     extendPeriod(new Date('2024-02-29T00:00:00Z'), 'YEARLY').toISOString(),
     '2025-02-28T00:00:00.000Z',
   );
-  assert.equal(subscriptionUsable({ status: 'ACTIVE', currentPeriodEnd: now }, now), false);
+  assert.equal(subscriptionUsable({ status: 'ACTIVE', currentPeriodEnd: now }, now, 7), true);
+  assert.equal(
+    subscriptionUsable(
+      { status: 'PAST_DUE', currentPeriodEnd: now },
+      new Date(now.getTime() + 7 * 86400000),
+      7,
+    ),
+    false,
+  );
+  assert.equal(subscriptionUsable({ status: 'ACTIVE', currentPeriodEnd: now }, now, 0), false);
   assert.equal(
     subscriptionUsable({ status: 'TRIAL', currentPeriodEnd: new Date(now.getTime() + 1) }, now),
     true,

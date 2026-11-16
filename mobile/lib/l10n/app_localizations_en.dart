@@ -175,6 +175,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'The school\'s subscription is not active. Please contact the school office.';
 
   @override
+  String get subscriptionPastDue =>
+      'The school\'s subscription is past due. Please contact the school office.';
+
+  @override
   String get children => 'Children';
 
   @override

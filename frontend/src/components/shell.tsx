@@ -383,7 +383,10 @@ export default function Shell({ children }: { children: ReactNode }) {
             {organization?.subscription &&
               new Date(organization.subscription.currentPeriodEnd) < new Date() && (
                 <div className="info-banner">
-                  Your subscription has expired. Campus records remain available in read-only mode.{' '}
+                  {new Date(organization.subscription.currentPeriodEnd).getTime() +
+                    user.subscriptionGraceDays * 86400000 > Date.now()
+                    ? 'Your subscription is past due. Please renew before the grace period ends.'
+                    : 'Your subscription has expired. Campus records remain available in read-only mode.'}{' '}
                   {billing ? (
                     <Link href="/subscription" className="text-green">
                       Renew subscription →

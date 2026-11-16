@@ -41,11 +41,12 @@ export const PLAN_SEEDS = [
 export function subscriptionUsable(
   subscription: { status: string; currentPeriodEnd: Date } | null,
   now = new Date(),
+  graceDays = Number(process.env.SUBSCRIPTION_GRACE_DAYS ?? 7),
 ) {
   return (
     !!subscription &&
-    ['TRIAL', 'ACTIVE'].includes(subscription.status) &&
-    subscription.currentPeriodEnd > now
+    ['TRIAL', 'ACTIVE', 'PAST_DUE'].includes(subscription.status) &&
+    subscription.currentPeriodEnd.getTime() + graceDays * 86400000 > now.getTime()
   );
 }
 export function extendPeriod(from: Date, period: string) {

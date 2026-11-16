@@ -467,7 +467,7 @@ test(
         );
         await db.subscription.update({
           where: { organizationId: a.organization.id },
-          data: { currentPeriodEnd: new Date(Date.now() - 1000) },
+          data: { currentPeriodEnd: new Date(Date.now() - 8 * 86400000) },
         });
         assert.equal(
           (await auth('website/draft', { revision: rev, content: draft }, 'PATCH')).status,

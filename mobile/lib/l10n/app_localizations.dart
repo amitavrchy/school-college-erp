@@ -410,6 +410,12 @@ abstract class AppLocalizations {
   /// **'The school\'s subscription is not active. Please contact the school office.'**
   String get schoolInactive;
 
+  /// No description provided for @subscriptionPastDue.
+  ///
+  /// In en, this message translates to:
+  /// **'The school\'s subscription is past due. Please contact the school office.'**
+  String get subscriptionPastDue;
+
   /// No description provided for @children.
   ///
   /// In en, this message translates to:

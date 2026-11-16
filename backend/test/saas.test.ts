@@ -742,19 +742,35 @@ test(
         });
       },
     );
-    await t.test('expired subscriptions preserve reads and block operational writes', async () => {
-      await db.subscription.update({
-        where: { organizationId: a.organization.id },
-        data: { currentPeriodEnd: new Date(Date.now() - 86400000) },
-      });
-      assert.equal((await request(a.cookie, a.campus.id, 'students')).status, 200);
-      assert.equal(
-        (await request(a.cookie, a.campus.id, 'classes', { name: 'Class 7', numericLevel: 7 }))
-          .status,
-        402,
-      );
-      assert.equal((await request(a.cookie, a.campus.id, 'saas/me')).status, 200);
-      assert.equal((await request(a.cookie, a.campus.id, 'library/books')).status, 402);
-    });
+    await t.test(
+      'grace permits operations, then expiry preserves reads and blocks writes',
+      async () => {
+        await db.subscription.update({
+          where: { organizationId: a.organization.id },
+          data: { currentPeriodEnd: new Date(Date.now() - 86400000) },
+        });
+        assert.equal(
+          (
+            await request(a.cookie, a.campus.id, 'classes', {
+              name: 'Grace class',
+              numericLevel: 12,
+            })
+          ).status,
+          201,
+        );
+        await db.subscription.update({
+          where: { organizationId: a.organization.id },
+          data: { currentPeriodEnd: new Date(Date.now() - 8 * 86400000) },
+        });
+        assert.equal((await request(a.cookie, a.campus.id, 'students')).status, 200);
+        assert.equal(
+          (await request(a.cookie, a.campus.id, 'classes', { name: 'Class 7', numericLevel: 7 }))
+            .status,
+          402,
+        );
+        assert.equal((await request(a.cookie, a.campus.id, 'saas/me')).status, 200);
+        assert.equal((await request(a.cookie, a.campus.id, 'library/books')).status, 402);
+      },
+    );
   },
 );

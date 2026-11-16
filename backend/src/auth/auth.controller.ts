@@ -185,6 +185,7 @@ export class AuthController {
     if (!user) return user;
     return {
       ...user,
+      subscriptionGraceDays: config.SUBSCRIPTION_GRACE_DAYS,
       mfaEnabled: !!user.mfaEnabledAt,
       mfaSetupRequired: !user.mfaEnabledAt && requiresMfa(user),
     };
