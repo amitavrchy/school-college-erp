@@ -85,3 +85,31 @@ test('mobile navigation and minimum font size remain usable', async ({ page }) =
     );
   expect(small).toEqual([]);
 });
+
+test('mobile header keeps its controls within a narrow viewport with a long campus name', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  await login(page);
+  await page.goto('/reports');
+  await expect(page.getByRole('heading', { name: 'Reports & insights' })).toBeVisible();
+  const campus = page.getByLabel('Select campus');
+  await campus.evaluate((select: HTMLSelectElement) => {
+    select.options[select.selectedIndex].text = 'A very long campus name for a school';
+  });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
+  for (const control of [
+    page.getByRole('button', { name: 'Open navigation' }),
+    page.getByLabel('Language / ভাষা'),
+    campus,
+    page.getByRole('link', { name: 'Open notice board' }),
+  ]) {
+    await expect(control).toBeVisible();
+    const bounds = await control.boundingBox();
+    expect(bounds).not.toBeNull();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(320);
+  }
+});

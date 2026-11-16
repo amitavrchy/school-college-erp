@@ -1451,11 +1451,21 @@ label {
   }
   .mobile-menu {
     display: inline-flex;
+    flex-shrink: 0;
   }
   .topbar-left {
     display: flex;
     align-items: center;
     gap: 8px;
+    min-width: 0;
+  }
+  .breadcrumb {
+    min-width: 0;
+  }
+  .breadcrumb strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .breadcrumb > span,
   .breadcrumb > svg {
@@ -1463,8 +1473,15 @@ label {
   }
   .topbar-right {
     gap: 2px;
+    min-width: 0;
+  }
+  .topbar-right > svg,
+  .topbar-right > .icon-button,
+  .topbar-right > .locale-switch {
+    flex-shrink: 0;
   }
   .campus-select {
+    min-width: 0;
     max-width: 166px;
     font-size: 14px;
     padding-right: 9px;
@@ -2300,7 +2317,7 @@ label {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: 14px;
   white-space: nowrap;
 }
 .locale-switch select {
