@@ -1,4 +1,6 @@
 'use client';
+import { LocaleSwitch, useI18n } from '@/components/i18n';
+import { bn, type Message } from '@/lib/i18n-catalog';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
@@ -161,6 +163,8 @@ const nav = [
   { href: '/settings', label: 'Settings', icon: Settings2, roles: [], group: 'MANAGEMENT' },
 ];
 export default function Shell({ children }: { children: ReactNode }) {
+  const { t } = useI18n();
+  const translate = (label: string) => (Object.hasOwn(bn, label) ? t(label as Message) : label);
   const path = usePathname(),
     router = useRouter();
   const [user, setUser] = useState<any>(null),
@@ -273,8 +277,8 @@ export default function Shell({ children }: { children: ReactNode }) {
           </Link>
           {['WORKSPACE', 'MANAGEMENT'].map((group) => (
             <div key={group}>
-              <div className="workspace-label">{group}</div>
-              <nav aria-label={group} className="nav-group">
+              <div className="workspace-label">{translate(group)}</div>
+              <nav aria-label={translate(group)} className="nav-group">
                 {nav
                   .filter(
                     (n) =>
@@ -290,7 +294,7 @@ export default function Shell({ children }: { children: ReactNode }) {
                       aria-current={current?.href === n.href ? 'page' : undefined}
                     >
                       <n.icon size={19} strokeWidth={1.6} />
-                      {n.label}
+                      {translate(n.label)}
                     </Link>
                   ))}
               </nav>
@@ -299,10 +303,10 @@ export default function Shell({ children }: { children: ReactNode }) {
           <div className="sidebar-bottom">
             <div className="help-card">
               <CircleHelp size={22} color="#7e9b82" />
-              <h3>Here to help you.</h3>
-              <p>Find your way around your connected campus.</p>
+              <h3>{t('Here to help you.')}</h3>
+              <p>{t('Find your way around your connected campus.')}</p>
               <Link href="/help">
-                Visit help center <ArrowUpRight size={16} />
+                {t('Visit help center')} <ArrowUpRight size={16} />
               </Link>
             </div>
             <div className="user-block">
@@ -311,7 +315,7 @@ export default function Shell({ children }: { children: ReactNode }) {
                 <strong>{user.fullName}</strong>
                 <span>{roles[0]?.replaceAll('_', ' ').toLowerCase()}</span>
               </div>
-              <button aria-label="Sign out" title="Sign out" onClick={logout}>
+              <button aria-label={t('Sign out')} title={t('Sign out')} onClick={logout}>
                 <LogOut size={17} />
               </button>
             </div>
@@ -329,15 +333,16 @@ export default function Shell({ children }: { children: ReactNode }) {
                 <Menu size={21} />
               </button>
               <div className="breadcrumb">
-                <span>Workspace</span>
+                <span>{t('Workspace')}</span>
                 <ChevronRight size={14} />
-                <strong>{current?.label || 'Help center'}</strong>
+                <strong>{translate(current?.label || 'Help center')}</strong>
               </div>
             </div>
             <div className="topbar-right">
+              <LocaleSwitch />
               <Building2 size={17} color="#91a094" />
               <select
-                aria-label="Select campus"
+                aria-label={t('Select campus')}
                 className="campus-select"
                 value={campusId}
                 onChange={(e) => {

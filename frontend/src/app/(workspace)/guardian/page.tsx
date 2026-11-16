@@ -1,12 +1,14 @@
 'use client';
 import Link from 'next/link';
 import { useState } from 'react';
+import { useI18n } from '@/components/i18n';
 import { CalendarDays, ClipboardCheck, Download, GraduationCap, Plus, Wallet } from 'lucide-react';
 import { useCampus } from '@/components/shell';
 import { Badge, Button, FormModal, PageTitle, Panel, Stat, State, Toast } from '@/components/ui';
 import { useData } from '@/lib/use-data';
 import { bdt, displayDate, pdfDownload, post } from '@/lib/api';
 export default function Guardian() {
+  const { t } = useI18n();
   const { user } = useCampus(),
     { data, error, loading, reload } = useData('guardians/me/dashboard'),
     { data: notices } = useData('notices'),
@@ -26,13 +28,13 @@ export default function Guardian() {
   return (
     <>
       <PageTitle
-        title={`Hello, ${user.fullName.split(' ')[0]}.`}
-        eyebrow="A LITTLE CLOSER TO THEIR EVERY DAY"
-        description="Your family’s school life, connected in one place."
+        title={`${t('Hello')}, ${user.fullName.split(' ')[0]}.`}
+        eyebrow={t('A LITTLE CLOSER TO THEIR EVERY DAY')}
+        description={t('Your family’s school life, connected in one place.')}
       >
         <Link href="/fees" className="button primary">
           <Wallet size={17} />
-          View fees & payments
+          {t('View fees & payments')}
         </Link>
       </PageTitle>
       <div className="toolbar" style={{ padding: '0 0 24px' }}>
@@ -49,7 +51,7 @@ export default function Guardian() {
         </div>
         <Button variant="secondary" disabled={!student} onClick={() => setLeave(true)}>
           <Plus size={16} />
-          Request leave
+          {t('Request leave')}
         </Button>
       </div>
       {!student ? (
@@ -62,12 +64,12 @@ export default function Guardian() {
             <div>
               <div className="banner-tag">
                 <GraduationCap size={17} />
-                GROWING A LITTLE EVERY DAY
+                {t('GROWING A LITTLE EVERY DAY')}
               </div>
               <h2>{student.fullName}</h2>
               <p>
-                {student.studentCode} · {enrollment?.section.schoolClass.name} · Section{' '}
-                {enrollment?.section.name} · Roll {enrollment?.rollNumber}
+                {student.studentCode} · {enrollment?.section.schoolClass.name} · {t('Section')}{' '}
+                {enrollment?.section.name} · {t('Roll')} {enrollment?.rollNumber}
               </p>
             </div>
             <Button
@@ -81,28 +83,28 @@ export default function Guardian() {
               }}
             >
               <Download size={16} />
-              Report card
+              {t('Report card')}
             </Button>
           </div>
           <div className="stats-grid">
             <Stat
-              label="Recent attendance"
+              label={t('Recent attendance')}
               value={
                 attendance.length ? `${Math.round((present / attendance.length) * 100)}%` : '—'
               }
-              note={`Across ${attendance.length} marked school days`}
+              note={`${t('Across')} ${attendance.length} ${t('marked school days')}`}
               icon={<ClipboardCheck size={18} />}
               color="green"
             />
             <Stat
-              label="Published GPA"
+              label={t('Published GPA')}
               value={term ? term.gpa.toFixed(2) : '—'}
-              note={term?.term.name || 'Results are not published yet'}
+              note={term?.term.name || t('Results are not published yet')}
               icon={<GraduationCap size={18} />}
               color="blue"
             />
             <Stat
-              label="Outstanding fees"
+              label={t('Outstanding fees')}
               value={bdt(
                 student.invoices.reduce(
                   (n: number, i: any) =>
@@ -110,26 +112,26 @@ export default function Guardian() {
                   0,
                 ),
               )}
-              note="View invoice details in Fees"
+              note={t('View invoice details in Fees')}
               icon={<Wallet size={18} />}
               color="amber"
             />
             <Stat
-              label="School notices"
+              label={t('School notices')}
               value={notices?.length || 0}
-              note="Updates for your family"
+              note={t('Updates for your family')}
               icon={<CalendarDays size={18} />}
               color="purple"
             />
           </div>
           <div className="grid-two">
-            <Panel title="Recent attendance" subtitle="A window into their school days">
+            <Panel title={t('Recent attendance')} subtitle={t('A window into their school days')}>
               <div className="table-wrap">
                 <table>
                   <thead>
                     <tr>
-                      <th>Date</th>
-                      <th>Status</th>
+                      <th>{t('Date')}</th>
+                      <th>{t('Status')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -137,7 +139,7 @@ export default function Guardian() {
                       <tr key={a.id}>
                         <td>{displayDate(a.date)}</td>
                         <td>
-                          <Badge>{a.status}</Badge>
+                          <Badge tone={statusTone(a.status)}>{localizeStatus(a.status, t)}</Badge>
                         </td>
                       </tr>
                     ))}
@@ -147,10 +149,10 @@ export default function Guardian() {
               </div>
             </Panel>
             <Panel
-              title="Family notice board"
+              title={t('Family notice board')}
               action={
                 <Link href="/notices" className="button ghost">
-                  View all
+                  {t('View all')}
                 </Link>
               }
             >
@@ -168,15 +170,15 @@ export default function Guardian() {
             </Panel>
           </div>
           <div className="section-space">
-            <Panel title="Weekly timetable">
+            <Panel title={t('Weekly timetable')}>
               <div className="table-wrap">
                 <table>
                   <thead>
                     <tr>
-                      <th>Day</th>
-                      <th>Period</th>
-                      <th>Subject</th>
-                      <th>Room</th>
+                      <th>{t('Day')}</th>
+                      <th>{t('Period')}</th>
+                      <th>{t('Subject')}</th>
+                      <th>{t('Room')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -185,13 +187,13 @@ export default function Guardian() {
                         <td>
                           {
                             [
-                              'Sunday',
-                              'Monday',
-                              'Tuesday',
-                              'Wednesday',
-                              'Thursday',
-                              'Friday',
-                              'Saturday',
+                              t('Sunday'),
+                              t('Monday'),
+                              t('Tuesday'),
+                              t('Wednesday'),
+                              t('Thursday'),
+                              t('Friday'),
+                              t('Saturday'),
                             ][s.dayOfWeek]
                           }
                         </td>
@@ -209,15 +211,15 @@ export default function Guardian() {
             </Panel>
           </div>
           <div className="section-space">
-            <Panel title="Leave requests">
+            <Panel title={t('Leave requests')}>
               <div className="table-wrap">
                 <table>
                   <thead>
                     <tr>
-                      <th>From</th>
-                      <th>To</th>
-                      <th>Reason</th>
-                      <th>Status</th>
+                      <th>{t('From')}</th>
+                      <th>{t('To')}</th>
+                      <th>{t('Reason')}</th>
+                      <th>{t('Status')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -229,7 +231,7 @@ export default function Guardian() {
                           <td>{displayDate(l.toDate)}</td>
                           <td>{l.reason}</td>
                           <td>
-                            <Badge>{l.status}</Badge>
+                            <Badge tone={statusTone(l.status)}>{localizeStatus(l.status, t)}</Badge>
                           </td>
                         </tr>
                       ))}
@@ -242,21 +244,35 @@ export default function Guardian() {
       )}
       {leave && (
         <FormModal
-          title={`Request leave for ${student.fullName}`}
+          title={`${t('Request leave for')} ${student.fullName}`}
+          submitLabel={t('Request leave')}
           onClose={() => setLeave(false)}
           fields={[
-            { key: 'fromDate', label: 'From date', type: 'date' },
-            { key: 'toDate', label: 'To date', type: 'date' },
-            { key: 'reason', label: 'Reason for leave', type: 'textarea' },
+            { key: 'fromDate', label: t('From date'), type: 'date' },
+            { key: 'toDate', label: t('To date'), type: 'date' },
+            { key: 'reason', label: t('Reason for leave'), type: 'textarea' },
           ]}
           onSubmit={async (v) => {
             await post('leaves', { ...v, studentId: student.id });
             await reloadLeaves();
-            setToast('Leave request submitted to your school');
+            setToast(t('Leave request submitted to your school'));
           }}
         />
       )}
       <Toast message={toast} clear={() => setToast('')} />
     </>
   );
+}
+
+function localizeStatus(status: string, t: ReturnType<typeof useI18n>['t']) {
+  const known = ['PRESENT', 'LATE', 'ABSENT', 'APPROVED', 'REJECTED', 'PENDING'] as const;
+  const key = known.find((value) => value === status);
+  return key ? t(key) : status;
+}
+
+function statusTone(status: string) {
+  if (['PRESENT', 'APPROVED'].includes(status)) return 'green';
+  if (['ABSENT', 'REJECTED'].includes(status)) return 'red';
+  if (status === 'LATE') return 'amber';
+  return 'blue';
 }
