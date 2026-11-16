@@ -163,7 +163,7 @@ void main() {
 
   test('cachedGet returns saved data for network and server errors', () async {
     final store = await Store.open();
-    await store.cache('dashboard', {'name': 'saved'});
+    await store.cache('campus-a:dashboard', {'name': 'saved'});
     var status = 0;
     final dio = Dio(BaseOptions(baseUrl: 'http://localhost'));
     dio.httpClientAdapter = Adapter((options) async {
@@ -176,10 +176,12 @@ void main() {
       return response(status, {'message': 'error'});
     });
     final api = Api(store, dio: dio);
+    api.campusId = 'campus-a';
     final provider = FutureProvider(
       (ref) => cachedGet(ref, 'dashboard', '/dashboard'),
     );
     final container = ProviderContainer(
+      retry: (_, _) => null,
       overrides: [
         storeProvider.overrideWithValue(store),
         apiProvider.overrideWithValue(api),
@@ -193,6 +195,9 @@ void main() {
       expect(result.data['name'], 'saved');
       expect(result.stale, isTrue);
     }
+    api.campusId = 'campus-b';
+    container.invalidate(provider);
+    await expectLater(container.read(provider.future), throwsA(isA<ApiException>()));
   });
 
   testWidgets('cached data appears with offline banner', (tester) async {

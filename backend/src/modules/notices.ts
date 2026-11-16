@@ -34,13 +34,18 @@ export class NoticesController {
       where: this.scope.studentFilter(c),
       include: { enrollments: true },
     });
-    const sectionIds = new Set(students.flatMap((s) => s.enrollments.map((e) => e.sectionId)));
     return all.filter((n) => {
       const a = n.audience as { sectionIds?: string[]; studentIds?: string[] };
       return (
         (!a.sectionIds?.length && !a.studentIds?.length) ||
-        ((!a.sectionIds?.length || a.sectionIds.some((id) => sectionIds.has(id))) &&
-          (!a.studentIds?.length || students.some((s) => a.studentIds!.includes(s.id))))
+        students.some(
+          (s) =>
+            (!a.studentIds?.length || a.studentIds.includes(s.id)) &&
+            (!a.sectionIds?.length ||
+              s.enrollments.some(
+                (e) => e.status === 'ACTIVE' && a.sectionIds!.includes(e.sectionId),
+              )),
+        )
       );
     });
   }

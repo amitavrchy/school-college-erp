@@ -45,6 +45,7 @@ export interface Context {
   roles: Role[];
   fullName: string;
   orgId: string;
+  appOrgId?: string;
   platformAdmin?: boolean;
 }
 export const Actor = createParamDecorator(
@@ -128,6 +129,7 @@ export class AccessGuard implements CanActivate {
       userId: user.id,
       campusId: campusId || '',
       orgId,
+      appOrgId: claims.org,
       roles,
       fullName: user.fullName,
       platformAdmin: user.platformAdmin,

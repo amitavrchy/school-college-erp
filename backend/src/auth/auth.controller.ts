@@ -171,9 +171,11 @@ export class AuthController {
         platformAdmin: true,
         mfaEnabledAt: true,
         memberships: {
+          ...(ctx.appOrgId ? { where: { organizationId: ctx.appOrgId } } : {}),
           include: { organization: { include: { subscription: { include: { plan: true } } } } },
         },
         roles: {
+          ...(ctx.appOrgId ? { where: { campus: { orgId: ctx.appOrgId } } } : {}),
           include: {
             campus: {
               include: { organization: { include: { subscription: { include: { plan: true } } } } },

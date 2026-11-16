@@ -206,37 +206,43 @@ class Loaded<T> {
 }
 
 Future<Loaded<dynamic>> cachedGet(Ref ref, String key, String path) async {
+  final campusId = ref.read(apiProvider).campusId;
+  final cacheKey = '$campusId:$key';
   final api = ref.read(apiProvider);
   final store = ref.read(storeProvider);
   try {
     final data = await api.get(path);
-    await store.cache(key, data);
+    await store.cache(cacheKey, data);
     return Loaded(data);
   } on ApiException catch (e) {
     if (!e.offline && e.status < 500) rethrow;
-    final saved = await store.cached(key);
+    final saved = await store.cached(cacheKey);
     if (saved == null) rethrow;
     return Loaded(saved.data, savedAt: saved.at);
   }
 }
 
-final dashboardProvider = FutureProvider.autoDispose<Loaded<dynamic>>(
-  (ref) => cachedGet(ref, 'dashboard', '/guardians/me/dashboard'),
-);
-final noticesProvider = FutureProvider.autoDispose<Loaded<dynamic>>(
-  (ref) => cachedGet(ref, 'notices', '/notices'),
-);
-final invoicesProvider = FutureProvider.autoDispose<Loaded<dynamic>>(
-  (ref) => cachedGet(ref, 'invoices', '/fees/invoices'),
-);
-final paymentsProvider = FutureProvider.autoDispose<Loaded<dynamic>>(
-  (ref) => cachedGet(ref, 'payments', '/payments'),
-);
+final dashboardProvider = FutureProvider.autoDispose<Loaded<dynamic>>((ref) {
+  ref.watch(sessionProvider);
+  return cachedGet(ref, 'dashboard', '/guardians/me/dashboard');
+});
+final noticesProvider = FutureProvider.autoDispose<Loaded<dynamic>>((ref) {
+  ref.watch(sessionProvider);
+  return cachedGet(ref, 'notices', '/notices');
+});
+final invoicesProvider = FutureProvider.autoDispose<Loaded<dynamic>>((ref) {
+  ref.watch(sessionProvider);
+  return cachedGet(ref, 'invoices', '/fees/invoices');
+});
+final paymentsProvider = FutureProvider.autoDispose<Loaded<dynamic>>((ref) {
+  ref.watch(sessionProvider);
+  return cachedGet(ref, 'payments', '/payments');
+});
 final resultsProvider = FutureProvider.autoDispose
-    .family<Loaded<dynamic>, String>(
-      (ref, studentId) =>
-          cachedGet(ref, 'results:$studentId', '/exams/results/$studentId'),
-    );
+    .family<Loaded<dynamic>, String>((ref, studentId) {
+      ref.watch(sessionProvider);
+      return cachedGet(ref, 'results:$studentId', '/exams/results/$studentId');
+    });
 final appConfigProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
   final store = ref.read(storeProvider);
   try {

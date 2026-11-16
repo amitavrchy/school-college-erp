@@ -238,6 +238,147 @@ test(
         assert.equal((await request('teacher', b.id, 'students')).status, 403);
       },
     );
+    await t.test('family data and devices are isolated by guardian and campus', async () => {
+      const original = await db.user.findUniqueOrThrow({ where: { id: 'guardian' } });
+      const other = await db.user.create({
+        data: {
+          fullName: 'Other guardian',
+          email: prefix + '@example.com',
+          passwordHash: original.passwordHash,
+        },
+      });
+      const child = await db.student.create({
+        data: {
+          campusId: a.id,
+          studentCode: prefix + '-other',
+          fullName: 'Other child',
+          enrollments: { create: { sessionId: sessions[0].id, sectionId: sections[0].id } },
+          guardians: { create: { guardianUserId: other.id } },
+        },
+        include: { enrollments: true },
+      });
+      await db.organizationMember.create({
+        data: { organizationId: org.id, userId: other.id, role: 'MEMBER' },
+      });
+      await db.userCampusRole.create({
+        data: { userId: other.id, campusId: a.id, role: 'GUARDIAN' },
+      });
+      const payment = await db.payment.create({
+        data: {
+          studentId: child.id,
+          provider: 'MANUAL',
+          status: 'SUCCESS',
+          amountMinor: 100,
+          idempotencyKey: prefix + '-private',
+        },
+      });
+      await db.invoice.create({
+        data: {
+          studentId: child.id,
+          sessionId: sessions[0].id,
+          dueDate: new Date(),
+          totalMinor: 100,
+        },
+      });
+      await db.attendanceRecord.create({
+        data: {
+          enrollmentId: child.enrollments[0].id,
+          markedBy: 'teacher',
+          date: new Date(day),
+          period: 0,
+          status: 'ABSENT',
+        },
+      });
+      const notice = await db.notice.create({
+        data: {
+          campusId: a.id,
+          title: 'Private',
+          body: 'Private notice',
+          status: 'SENT',
+          channels: ['IN_APP'],
+          audience: { studentIds: [child.id], sectionIds: [sections[0].id] },
+        },
+      });
+      const token = prefix + '-device-token-123456789';
+      try {
+        const dashboard = await request('guardian', a.id, 'guardians/me/dashboard');
+        assert.deepEqual(
+          dashboard.data.students.map((s: any) => s.id),
+          [students[0].id],
+        );
+        assert.equal(
+          (await request('guardian', a.id, 'attendance?date=' + day + '&studentId=' + child.id))
+            .data.length,
+          0,
+        );
+        assert.equal((await request('guardian', a.id, 'exams/results/' + child.id)).status, 404);
+        assert.equal(
+          (await request('guardian', a.id, 'students/' + child.id + '/report-card')).status,
+          404,
+        );
+        assert.ok(
+          !(await request('guardian', a.id, 'fees/invoices')).data.some(
+            (i: any) => i.studentId === child.id,
+          ),
+        );
+        assert.ok(
+          !(await request('guardian', a.id, 'payments')).data.some((p: any) => p.id === payment.id),
+        );
+        assert.equal(
+          (await request('guardian', a.id, 'payments/' + payment.id + '/receipt')).status,
+          404,
+        );
+        assert.ok(
+          !(await request('guardian', a.id, 'notices')).data.some((n: any) => n.id === notice.id),
+        );
+        assert.equal((await request('guardian', b.id, 'guardians/me/dashboard')).status, 403);
+        const foreignCampus = await db.campus.findFirstOrThrow({
+          where: { orgId: { not: org.id } },
+        });
+        assert.equal(
+          (await request('guardian', a.id, 'exams/results/' + students[1].id)).status,
+          404,
+        );
+        const device = await request('guardian', a.id, 'devices', {
+          platform: 'android',
+          pushToken: token,
+        });
+        assert.equal(device.status, 201);
+        const login = await fetch(base + '/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: other.email,
+            password: process.env.SEED_PASSWORD || 'CampusOne!2026',
+          }),
+        });
+        assert.equal(login.status, 201);
+        cookies.other = login.headers.get('set-cookie')!.split(';')[0];
+        assert.equal(
+          (await request('other', foreignCampus.id, 'guardians/me/dashboard')).status,
+          403,
+        );
+        assert.equal(
+          (await request('other', a.id, 'devices', { platform: 'android', pushToken: token }))
+            .status,
+          403,
+        );
+        await request('other', a.id, 'devices/' + device.data.id, undefined, 'DELETE');
+        assert.ok(await db.device.findUnique({ where: { pushToken: token } }));
+      } finally {
+        await db.device.deleteMany({ where: { pushToken: token } });
+        await db.notice.delete({ where: { id: notice.id } });
+        await db.payment.delete({ where: { id: payment.id } });
+        await db.invoice.deleteMany({ where: { studentId: child.id } });
+        await db.attendanceRecord.deleteMany({ where: { enrollmentId: child.enrollments[0].id } });
+        await db.guardianStudent.deleteMany({ where: { studentId: child.id } });
+        await db.enrollment.deleteMany({ where: { studentId: child.id } });
+        await db.student.delete({ where: { id: child.id } });
+        await db.userCampusRole.deleteMany({ where: { userId: other.id } });
+        await db.organizationMember.deleteMany({ where: { userId: other.id } });
+        await db.user.delete({ where: { id: other.id } });
+      }
+    });
     await t.test('guardian sees only linked students and published results', async () => {
       const list = await request('guardian', a.id, 'students');
       assert.equal(list.data.total, 1);

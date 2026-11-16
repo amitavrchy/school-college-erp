@@ -758,6 +758,29 @@ test(
           403,
           'an account cannot sign in to another school app',
         );
+        await db.organizationMember.create({
+          data: { organizationId: b.organization.id, userId: a.user.id, role: 'MEMBER' },
+        });
+        await db.userCampusRole.create({
+          data: { campusId: b.campus.id, userId: a.user.id, role: 'GUARDIAN' },
+        });
+        try {
+          const me = await call(signIn.data.accessToken, a.campus.id, 'auth/me');
+          assert.equal(me.status, 200);
+          assert.ok(me.data.roles.every((r: any) => r.campus.orgId === a.organization.id));
+          assert.ok(me.data.memberships.every((m: any) => m.organizationId === a.organization.id));
+          assert.equal(
+            (await call(signIn.data.accessToken, b.campus.id, 'guardians/me/dashboard')).status,
+            403,
+          );
+        } finally {
+          await db.userCampusRole.deleteMany({
+            where: { campusId: b.campus.id, userId: a.user.id },
+          });
+          await db.organizationMember.deleteMany({
+            where: { organizationId: b.organization.id, userId: a.user.id },
+          });
+        }
         // Rotation: the new refresh token works once; replaying the old one ends the chain.
         const first = await call('', '', 'auth/refresh', {
           refreshToken: signIn.data.refreshToken,
@@ -783,7 +806,7 @@ test(
         assert.equal(guardian.status, 201, JSON.stringify(guardian.data));
         const unknown = await call('', '', 'auth/codes', {
           purpose: 'GUARDIAN_LOGIN',
-          contact: '01999999999',
+          contact: `019${String(Date.now()).slice(-8)}`,
           school: a.organization.slug,
         });
         assert.equal(unknown.status, 201);

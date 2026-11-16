@@ -15,7 +15,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { compare } from 'bcryptjs';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import type { Response } from 'express';
 import { createHash, randomBytes } from 'node:crypto';
 import { z } from 'zod';
@@ -316,7 +316,7 @@ export class MobileController {
       await this.db.device.deleteMany({ where: { pushToken: v.pushToken, userId: row.userId } });
     return { ok: true };
   }
-  /** Registers (or moves) this phone's push token to the signed-in user. */
+  /** Registers a push token for the signed-in user. */
   @Post('devices')
   async register(@Actor() c: Context, @Body() body: unknown) {
     const v = parse(
@@ -330,13 +330,21 @@ export class MobileController {
     );
     if (!c.orgId) throw new ForbiddenException('Choose a campus first');
     const data = { ...v, userId: c.userId, organizationId: c.orgId, lastSeenAt: new Date() };
-    const device = await this.db.device.upsert({
-      where: { pushToken: v.pushToken },
-      create: data,
-      update: data,
-      select: { id: true },
-    });
-    return device;
+    try {
+      return await this.db.device.create({ data, select: { id: true } });
+    } catch (error) {
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002')
+        throw error;
+      const updated = await this.db.device.updateMany({
+        where: { pushToken: v.pushToken, userId: c.userId },
+        data,
+      });
+      if (!updated.count) throw new ForbiddenException('Device token belongs to another account');
+      return this.db.device.findFirstOrThrow({
+        where: { pushToken: v.pushToken, userId: c.userId },
+        select: { id: true },
+      });
+    }
   }
   @Delete('devices/:id')
   async unregister(@Actor() c: Context, @Param('id') deviceId: string) {
