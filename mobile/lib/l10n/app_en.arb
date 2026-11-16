@@ -49,10 +49,10 @@
   "@attendanceRate": {
     "placeholders": {
       "percent": {
-        "type": "int"
+        "type": "String"
       },
       "days": {
-        "type": "int"
+        "type": "String"
       }
     }
   },
@@ -115,5 +115,16 @@
     }
   },
   "devices": "Signed-in phones",
-  "staffNotYet": "Staff features are coming in the next release. Please use the web app for now."
+  "staffNotYet": "Staff features are coming in the next release. Please use the web app for now.",
+  "updateTitle": "Update required",
+  "openStore": "Open app store",
+  "noInternet": "No internet connection. Check your connection and try again.",
+  "requestFailed": "The request could not be completed. Please try again.",
+  "unknownStatus": "Unknown status",
+  "noAttendance": "No attendance records yet",
+  "noInvoices": "No invoices yet",
+  "noPayments": "No payments yet",
+  "languageNameBn": "বাংলা",
+  "languageNameEn": "English",
+  "phoneExample": "01XXXXXXXXX"
 }

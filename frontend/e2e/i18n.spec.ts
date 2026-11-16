@@ -26,6 +26,7 @@ test('language selection persists across sign-in, admission and guardian pages',
           {
             id: 'student1',
             fullName: 'Student',
+            fullNameBn: 'শিক্ষার্থী',
             studentCode: '1',
             enrollments: [
               {
@@ -40,7 +41,7 @@ test('language selection persists across sign-in, admission and guardian pages',
           },
         ],
       },
-      '/api/notices': [],
+      '/api/notices': [{ id: 'n1', title: 'Notice', body: 'English notice', bodyBn: 'বাংলা বিজ্ঞপ্তি', createdAt: '2026-01-01' }],
       '/api/leaves': [],
       '/api/exams/results/student1': [],
       '/api/timetable': [],
@@ -60,7 +61,10 @@ test('language selection persists across sign-in, admission and guardian pages',
   await page.goto('/guardian');
   await expect(page.getByText('সাম্প্রতিক উপস্থিতি').first()).toBeVisible();
   await expect(page.getByText('100%')).toBeVisible();
+  await expect(page.getByText('বাংলা বিজ্ঞপ্তি')).toBeVisible();
+  await expect(page.getByText('English notice')).toBeHidden();
   await page.getByLabel('Language / ভাষা').selectOption('en');
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   await expect(page.getByText('Recent attendance').first()).toBeVisible();
+  await expect(page.getByText('English notice')).toBeVisible();
 });

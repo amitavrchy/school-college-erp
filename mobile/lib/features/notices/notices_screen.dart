@@ -1,3 +1,5 @@
+import '../../core/ui/spacing.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -13,7 +15,6 @@ class NoticesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = AppLocalizations.of(context);
-    final bangla = Localizations.localeOf(context).languageCode == 'bn';
     return AsyncView(
       value: ref.watch(noticesProvider),
       onRetry: () => ref.invalidate(noticesProvider),
@@ -23,22 +24,31 @@ class NoticesScreen extends ConsumerWidget {
         return RefreshIndicator(
           onRefresh: () async => ref.invalidate(noticesProvider),
           child: ListView.separated(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppSpacing.page),
             itemCount: notices.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 12),
+            separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
             itemBuilder: (context, i) {
               final n = notices[i];
-              final body = bangla && (n['bodyBn'] as String?)?.isNotEmpty == true ? n['bodyBn'] : n['body'];
+              final body = localizedField(context, n, 'body');
               return Card(
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(n['title'] as String, style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 4),
-                    Text(day(context, n['createdAt'] as String), style: Theme.of(context).textTheme.bodySmall),
-                    const SizedBox(height: 8),
-                    Text(body as String),
-                  ]),
+                  padding: const EdgeInsets.all(AppSpacing.page),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        localizedField(context, n, 'title'),
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        day(context, n['createdAt'] as String),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(body),
+                    ],
+                  ),
                 ),
               );
             },

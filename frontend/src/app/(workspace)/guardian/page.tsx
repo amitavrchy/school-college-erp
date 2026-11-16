@@ -8,7 +8,9 @@ import { Badge, Button, FormModal, PageTitle, Panel, Stat, State, Toast } from '
 import { useData } from '@/lib/use-data';
 import { bdt, displayDate, pdfDownload, post } from '@/lib/api';
 export default function Guardian() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const localized = (value: any, field: string) =>
+    (locale === 'bn' && value?.[`${field}Bn`]) || value?.[field] || '';
   const { user } = useCampus(),
     { data, error, loading, reload } = useData('guardians/me/dashboard'),
     { data: notices } = useData('notices'),
@@ -45,7 +47,7 @@ export default function Guardian() {
               className={s.id === student?.id ? 'selected' : ''}
               onClick={() => setSelected(s.id)}
             >
-              {s.fullName}
+              {localized(s, 'fullName')}
             </button>
           ))}
         </div>
@@ -66,10 +68,10 @@ export default function Guardian() {
                 <GraduationCap size={17} />
                 {t('GROWING A LITTLE EVERY DAY')}
               </div>
-              <h2>{student.fullName}</h2>
+              <h2>{localized(student, 'fullName')}</h2>
               <p>
-                {student.studentCode} · {enrollment?.section.schoolClass.name} · {t('Section')}{' '}
-                {enrollment?.section.name} · {t('Roll')} {enrollment?.rollNumber}
+                {student.studentCode} · {localized(enrollment?.section.schoolClass, 'name')} · {t('Section')}{' '}
+                {localized(enrollment?.section, 'name')} · {t('Roll')} {enrollment?.rollNumber}
               </p>
             </div>
             <Button
@@ -160,8 +162,8 @@ export default function Guardian() {
                 {notices?.slice(0, 3).map((n: any) => (
                   <div key={n.id} className="notice-row">
                     <div>
-                      <h3>{n.title}</h3>
-                      <p>{n.body}</p>
+                      <h3>{localized(n, 'title')}</h3>
+                      <p>{localized(n, 'body')}</p>
                       <time>{displayDate(n.createdAt)}</time>
                     </div>
                   </div>
@@ -199,7 +201,7 @@ export default function Guardian() {
                         </td>
                         <td>{s.period}</td>
                         <td>
-                          <strong>{s.subject.name}</strong>
+                          <strong>{localized(s.subject, 'name')}</strong>
                         </td>
                         <td>{s.room}</td>
                       </tr>
@@ -244,7 +246,7 @@ export default function Guardian() {
       )}
       {leave && (
         <FormModal
-          title={`${t('Request leave for')} ${student.fullName}`}
+          title={`${t('Request leave for')} ${localized(student, 'fullName')}`}
           submitLabel={t('Request leave')}
           onClose={() => setLeave(false)}
           fields={[

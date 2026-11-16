@@ -62,6 +62,8 @@ void main() {
             installedVersionProvider.overrideWith((ref) async => version),
           ],
           child: const MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
             home: UpdateGate(child: Text('App content')),
           ),
         ),
@@ -197,7 +199,10 @@ void main() {
     }
     api.campusId = 'campus-b';
     container.invalidate(provider);
-    await expectLater(container.read(provider.future), throwsA(isA<ApiException>()));
+    await expectLater(
+      container.read(provider.future),
+      throwsA(isA<ApiException>()),
+    );
   });
 
   testWidgets('cached data appears with offline banner', (tester) async {
