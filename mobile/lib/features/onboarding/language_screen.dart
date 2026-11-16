@@ -39,7 +39,11 @@ class LanguageScreen extends ConsumerWidget {
               Text(School.name, style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: AppSpacing.xl),
               Text(
-                t.chooseLanguage,
+                lookupAppLocalizations(const Locale('bn')).chooseLanguage,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              Text(
+                lookupAppLocalizations(const Locale('en')).chooseLanguage,
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: AppSpacing.page),

@@ -101,6 +101,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
           child: Text(t.verify),
         ),
+        const SizedBox(height: AppSpacing.md),
         TextButton(
           onPressed: () => setState(() => _codeSent = false),
           child: Text(t.changeNumber),
@@ -168,8 +169,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               School.displayName(locale),
               style: Theme.of(context).textTheme.headlineSmall,
             ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(t.signInSubtitle),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              t.signInSubtitle,
+              style: Theme.of(context).textTheme.bodyMedium
+                  ?.copyWith(height: 1.4),
+            ),
             const SizedBox(height: AppSpacing.lg),
             ...field.map(
               (widget) => widget is FilledButton
@@ -193,7 +198,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
               ),
-            const SizedBox(height: AppSpacing.lg),
+            const SizedBox(height: AppSpacing.md),
             TextButton(
               onPressed: () => setState(() {
                 _staff = !_staff;
