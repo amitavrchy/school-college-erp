@@ -192,6 +192,8 @@ test(
       await db.organizationMember.deleteMany({ where: { organizationId: org.id } });
       await db.subscriptionEvent.deleteMany({ where: { organizationId: org.id } });
       await db.subscriptionPayment.deleteMany({ where: { organizationId: org.id } });
+      await db.subscriptionInvoice.deleteMany({ where: { organizationId: org.id } });
+      await db.subscriptionReminder.deleteMany({ where: { organizationId: org.id } });
       await db.subscription.deleteMany({ where: { organizationId: org.id } });
       await db.organization.delete({ where: { id: org.id } });
       await db.$disconnect();

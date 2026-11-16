@@ -6,7 +6,7 @@ import { Badge, Button, FormModal, PageTitle, Panel, Stat, State, Toast } from '
 import { useData } from '@/lib/use-data';
 import { bdt, displayDate, pdfDownload, post } from '@/lib/api';
 export default function Subscription() {
-  const { billing } = useCampus();
+  const { billing, user } = useCampus();
   const { data, error, loading, reload } = useData(billing ? 'saas/me' : null),
     { data: plans } = useData('saas/plans');
   const [request, setRequest] = useState(false),
@@ -57,7 +57,17 @@ export default function Subscription() {
         />
         <Stat
           label="Subscription"
-          value={expired ? 'Expired' : sub.status.toLowerCase()}
+          value={
+            !sub
+              ? 'No subscription'
+              : expired
+                ? new Date(sub.currentPeriodEnd).getTime() +
+                    user.subscriptionGraceDays * 86400000 <=
+                  Date.now()
+                  ? 'Expired'
+                  : 'Past due'
+                : sub.status.toLowerCase()
+          }
           note={
             sub ? `Valid until ${displayDate(sub.currentPeriodEnd)}` : 'Contact the platform team'
           }
@@ -164,6 +174,48 @@ export default function Subscription() {
       </div>
       <div className="section-space">
         <Panel
+          title="Subscription invoices"
+          subtitle="Renewal invoices are issued before payment and remain visible after review."
+        >
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Issued</th>
+                  <th>Plan</th>
+                  <th>Due</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Transactions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.invoices.map((invoice: any) => (
+                  <tr key={invoice.id}>
+                    <td>{displayDate(invoice.createdAt)}</td>
+                    <td>
+                      {invoice.plan.name} / {invoice.period.toLowerCase()}
+                    </td>
+                    <td>{displayDate(invoice.dueDate)}</td>
+                    <td>{bdt(invoice.amountMinor)}</td>
+                    <td>
+                      <Badge>{invoice.status}</Badge>
+                    </td>
+                    <td>
+                      {invoice.payments
+                        .map((payment: any) => `${payment.reference} (${payment.status})`)
+                        .join(', ') || '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!data.invoices.length && <State empty />}
+          </div>
+        </Panel>
+      </div>
+      <div className="section-space">
+        <Panel
           title="Transaction submissions"
           subtitle="Track review status and download approved receipts."
         >
@@ -246,6 +298,7 @@ export default function Subscription() {
             {
               key: 'period',
               label: 'Billing period',
+              defaultValue: sub?.period,
               options: [
                 { value: 'MONTHLY', label: 'One month' },
                 { value: 'YEARLY', label: 'One year' },

@@ -11,6 +11,7 @@ import type { Prisma } from '@prisma/client';
 import { Db } from '../db';
 import type { Context } from '../auth/access';
 import { extendPeriod } from './policy';
+import { issueInvoice } from './lifecycle';
 import { NCTB } from '../domain/grading';
 import { OneTimeCodes } from '../auth/otp';
 @Injectable()
@@ -105,6 +106,10 @@ export class Saas {
           },
         },
       });
+      const initialSubscription = await tx.subscription.findUniqueOrThrow({
+        where: { organizationId: org.id },
+      });
+      await issueInvoice(tx, initialSubscription, plan);
       if (!existingUserId)
         await tx.trialClaim.createMany({
           data: [
@@ -172,7 +177,7 @@ export class Saas {
   }
   async summary(ctx: Context) {
     await this.owner(ctx);
-    const [organization, usage, payments, events, settings] = await Promise.all([
+    const [organization, usage, payments, events, settings, invoices] = await Promise.all([
       this.db.organization.findUniqueOrThrow({
         where: { id: ctx.orgId },
         include: { subscription: { include: { plan: true } } },
@@ -189,8 +194,13 @@ export class Saas {
         take: 30,
       }),
       this.db.platformSettings.findUnique({ where: { id: 'platform' } }),
+      this.db.subscriptionInvoice.findMany({
+        where: { organizationId: ctx.orgId },
+        include: { plan: true, payments: true },
+        orderBy: { createdAt: 'desc' },
+      }),
     ]);
-    return { organization, usage, payments, events, paymentSettings: settings };
+    return { organization, usage, payments, events, invoices, paymentSettings: settings };
   }
   async activate(
     tx: Prisma.TransactionClient,
@@ -231,6 +241,7 @@ export class Saas {
       },
       update: { planId, period, status: 'ACTIVE', currentPeriodStart: now, currentPeriodEnd: end },
     });
+    await issueInvoice(tx, sub, plan);
     await tx.subscriptionEvent.create({
       data: {
         organizationId: orgId,
@@ -259,6 +270,26 @@ export class Saas {
         throw new ConflictException('This payment has already been reviewed');
       if (decision === 'APPROVED' && receivedAmountMinor !== current.amountMinor)
         throw new BadRequestException('Confirm the exact amount actually received before approval');
+      if (decision === 'APPROVED' && current.invoiceId) {
+        const invoice = await tx.subscriptionInvoice.findUniqueOrThrow({
+          where: { id: current.invoiceId },
+        });
+        if (invoice.status !== 'OPEN')
+          throw new ConflictException('This invoice is no longer payable');
+        await tx.subscriptionInvoice.update({
+          where: { id: invoice.id },
+          data: { status: 'PAID' },
+        });
+        await tx.subscriptionInvoice.updateMany({
+          where: {
+            organizationId: current.organizationId,
+            dueDate: invoice.dueDate,
+            status: 'OPEN',
+            id: { not: invoice.id },
+          },
+          data: { status: 'VOID' },
+        });
+      }
       if (decision === 'APPROVED')
         await this.activate(
           tx,
@@ -311,8 +342,14 @@ export class Saas {
           throw new ConflictException('Activation key was used for a different subscription');
         return tx.subscription.findUniqueOrThrow({ where: { organizationId } });
       }
+      const sub = await tx.subscription.findUniqueOrThrow({ where: { organizationId } });
+      const plan = await tx.subscriptionPlan.findUniqueOrThrow({ where: { id: v.planId } });
+      const invoice = await issueInvoice(tx, sub, plan, v.period);
+      if (invoice.status !== 'OPEN')
+        throw new ConflictException('This invoice is no longer payable');
       const payment = await tx.subscriptionPayment.create({
         data: {
+          invoiceId: invoice.id,
           organizationId,
           planId: v.planId,
           period: v.period,
@@ -325,6 +362,19 @@ export class Saas {
           reviewNote: v.reason,
           reviewedAt: new Date(),
         },
+      });
+      await tx.subscriptionInvoice.update({
+        where: { id: invoice.id },
+        data: { status: v.amountMinor >= invoice.amountMinor ? 'PAID' : 'WAIVED' },
+      });
+      await tx.subscriptionInvoice.updateMany({
+        where: {
+          organizationId,
+          dueDate: invoice.dueDate,
+          status: 'OPEN',
+          id: { not: invoice.id },
+        },
+        data: { status: 'VOID' },
       });
       return this.activate(tx, organizationId, v.planId, v.period, actorId, payment.id);
     });

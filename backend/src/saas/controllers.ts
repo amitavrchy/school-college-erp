@@ -19,6 +19,7 @@ import { Actor, Context, Public, PlatformOnly, BillingAccess, AccountAccess } fr
 import { id, parse, phone } from '../common';
 import { config } from '../config';
 import { Saas } from './service';
+import { issueInvoice } from './lifecycle';
 import { normalizeContact } from '../auth/otp';
 import { startSession } from '../auth/session';
 const institution = z.object({
@@ -132,9 +133,19 @@ export class SaasController {
       );
     return this.db.serial(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${c.orgId} FOR UPDATE`;
-      const amountMinor = v.period === 'YEARLY' ? plan.annualMinor : plan.monthlyMinor;
+      const sub = await tx.subscription.findUniqueOrThrow({ where: { organizationId: c.orgId } });
+      const invoice = await issueInvoice(tx, sub, plan, v.period);
+      if (invoice.status !== 'OPEN')
+        throw new BadRequestException('This invoice is no longer payable');
+      const amountMinor = invoice.amountMinor;
       const payment = await tx.subscriptionPayment.create({
-        data: { ...v, organizationId: c.orgId, amountMinor, submittedBy: c.userId },
+        data: {
+          ...v,
+          organizationId: c.orgId,
+          invoiceId: invoice.id,
+          amountMinor,
+          submittedBy: c.userId,
+        },
       });
       await tx.subscriptionEvent.create({
         data: {

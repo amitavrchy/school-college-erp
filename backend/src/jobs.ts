@@ -12,6 +12,7 @@ import { Billing } from './modules/billing';
 import { Notifier } from './notify';
 import { Settings } from './settings';
 import { subscriptionUsable } from './saas/policy';
+import { subscriptionLifecycle } from './saas/lifecycle';
 @Injectable()
 export class Jobs implements OnModuleInit, OnModuleDestroy {
   private connection = new IORedis(config.REDIS_URL, { maxRetriesPerRequest: null });
@@ -100,6 +101,8 @@ export class Jobs implements OnModuleInit, OnModuleDestroy {
             return this.fines();
           case 'monthly-billing':
             return this.monthlyBilling();
+          case 'subscription-lifecycle':
+            return subscriptionLifecycle(this.db, this.notifier);
           case 'fee-reminders':
             return this.feeReminders();
           case 'offer-expiry':
@@ -117,6 +120,7 @@ export class Jobs implements OnModuleInit, OnModuleDestroy {
     const schedules: [string, { every?: number; pattern?: string; tz?: string }][] = [
       ['notices', { every: 60_000 }],
       ['offer-expiry', { every: 10 * 60_000 }],
+      ['subscription-lifecycle', { every: 60 * 60_000 }],
       ['fines', { pattern: '0 1 * * *', tz }],
       ['monthly-billing', { pattern: '30 0 * * *', tz }],
       ['fee-reminders', { pattern: '0 9 * * *', tz }],

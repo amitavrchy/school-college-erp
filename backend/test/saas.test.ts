@@ -74,6 +74,75 @@ test(
     });
     assert.equal(platform.status, 201);
     await t.test(
+      'renewal milestones, invoice and grace transitions are persisted once',
+      async () => {
+        const { Db } = await import('../src/db');
+        const { subscriptionLifecycle } = await import('../src/saas/lifecycle');
+        const lifecycleDb = new Db();
+        const sent: string[] = [];
+        const notifier = {
+          email: async (to: string) => {
+            sent.push(to);
+          },
+        } as any;
+        const original = await db.subscription.findUniqueOrThrow({
+          where: { organizationId: b.organization.id },
+        });
+        const end = new Date(Date.now() + 7 * 86400000);
+        await db.subscription.update({
+          where: { id: original.id },
+          data: { currentPeriodEnd: end },
+        });
+        try {
+          for (const days of [7, 3, 1, 0]) {
+            const now = new Date(end.getTime() - days * 86400000);
+            await Promise.all([
+              subscriptionLifecycle(lifecycleDb, notifier, now, b.organization.id),
+              subscriptionLifecycle(lifecycleDb, notifier, now, b.organization.id),
+            ]);
+          }
+          assert.equal(sent.length, 4);
+          assert.equal(
+            await db.subscriptionReminder.count({ where: { organizationId: b.organization.id } }),
+            4,
+          );
+          const invoice = await db.subscriptionInvoice.findFirstOrThrow({
+            where: { organizationId: b.organization.id },
+          });
+          assert.equal(invoice.dueDate.getTime(), end.getTime());
+          assert.equal(invoice.amountMinor, 650000);
+          assert.equal(invoice.status, 'OPEN');
+          assert.equal(
+            (await db.subscription.findUniqueOrThrow({ where: { id: original.id } })).status,
+            'PAST_DUE',
+          );
+          const summary = await request(b.cookie, b.campus.id, 'saas/me');
+          assert.equal(summary.data.invoices[0].id, invoice.id);
+          await subscriptionLifecycle(
+            lifecycleDb,
+            notifier,
+            new Date(end.getTime() + 7 * 86400000),
+            b.organization.id,
+          );
+          assert.equal(
+            (await db.subscription.findUniqueOrThrow({ where: { id: original.id } })).status,
+            'EXPIRED',
+          );
+          assert.equal(sent.length, 4);
+        } finally {
+          await db.subscription.update({
+            where: { id: original.id },
+            data: { status: original.status, currentPeriodEnd: original.currentPeriodEnd },
+          });
+          await db.subscriptionInvoice.deleteMany({ where: { organizationId: b.organization.id } });
+          await db.subscriptionReminder.deleteMany({
+            where: { organizationId: b.organization.id },
+          });
+          await lifecycleDb.$disconnect();
+        }
+      },
+    );
+    await t.test(
       'institution owners cannot cross tenant boundaries or enter platform administration',
       async () => {
         assert.equal((await request(a.cookie, b.campus.id, 'students')).status, 403);
@@ -119,6 +188,15 @@ test(
           senderPhone: '01712345678',
         });
         assert.equal(submitted.status, 201);
+        assert.ok(submitted.data.invoiceId);
+        assert.equal(
+          (
+            await db.subscriptionInvoice.findUniqueOrThrow({
+              where: { id: submitted.data.invoiceId },
+            })
+          ).status,
+          'OPEN',
+        );
         assert.equal(
           (
             await db.subscription.findUniqueOrThrow({
@@ -174,6 +252,14 @@ test(
             where: { organizationId: a.organization.id, action: 'SUBSCRIPTION_ACTIVATED' },
           }),
           1,
+        );
+        assert.equal(
+          (
+            await db.subscriptionInvoice.findUniqueOrThrow({
+              where: { id: submitted.data.invoiceId },
+            })
+          ).status,
+          'PAID',
         );
         const sub = await db.subscription.findUniqueOrThrow({
           where: { organizationId: a.organization.id },
