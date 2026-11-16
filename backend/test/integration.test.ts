@@ -199,6 +199,34 @@ test(
       await db.$disconnect();
     });
     await t.test(
+      'setup checklist reflects campus data and dismissal is shared only within the organization',
+      async () => {
+        const initial = await request('admin', b.id, 'setup');
+        assert.equal(initial.status, 200);
+        assert.deepEqual(
+          initial.data.steps.map((step: any) => step.done),
+          [true, true, true, false, true, false],
+        );
+        assert.equal(initial.data.dismissed, false);
+        assert.equal((await request('teacher', a.id, 'setup')).status, 403);
+        assert.equal((await request('teacher', a.id, 'setup/dismiss', {})).status, 403);
+        await db.feeStructure.create({
+          data: { sessionId: sessions[1].id, classId: classes[1].id, name: 'Setup fee' },
+        });
+        await db.guardianStudent.create({
+          data: { guardianUserId: 'guardian', studentId: students[1].id },
+        });
+        const complete = await request('admin', b.id, 'setup');
+        assert.ok(complete.data.steps.every((step: any) => step.done));
+        const otherCampus = await request('admin', a.id, 'setup');
+        assert.equal(otherCampus.data.steps.find((step: any) => step.id === 'fees').done, false);
+        assert.equal((await request('admin', b.id, 'setup/dismiss', {})).status, 201);
+        assert.equal((await request('admin', a.id, 'setup')).data.dismissed, true);
+        const otherOrg = await db.organization.findUniqueOrThrow({ where: { id: 'org-scholars' } });
+        assert.equal(otherOrg.setupDismissedAt, null);
+      },
+    );
+    await t.test(
       'teacher cannot mark another campus or impersonate campus membership',
       async () => {
         const response = await request('teacher', a.id, 'attendance/bulk', {

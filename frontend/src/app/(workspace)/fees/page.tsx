@@ -38,6 +38,9 @@ export default function Fees() {
     ).values(),
   ];
   useEffect(() => {
+    if (window.location.hash === '#fee-structures' && finance) setTab('Fee structures');
+  }, [finance]);
+  useEffect(() => {
     if (finance && new URLSearchParams(window.location.search).has('collect')) setModal('payment');
   }, [finance]);
   const fields: Record<string, Field[]> = {

@@ -317,6 +317,7 @@ model Organization {
   supportEmail String?
   accentColor String @default("#22644f")
   websiteEnabled Boolean @default(false)
+  setupDismissedAt DateTime?
   createdAt DateTime @default(now())
   members OrganizationMember[]
   subscription Subscription?

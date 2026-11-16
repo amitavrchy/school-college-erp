@@ -27,6 +27,7 @@ import { ExamsController } from './modules/exams';
 import { DocumentsController } from './modules/documents';
 import { NoticesController } from './modules/notices';
 import { ReportsController } from './modules/reports';
+import { SetupController } from './modules/setup';
 import { LifecycleController } from './modules/lifecycle';
 import { Billing } from './modules/billing';
 import { UploadsController } from './modules/uploads';
@@ -71,6 +72,7 @@ import {
     DocumentsController,
     NoticesController,
     ReportsController,
+    SetupController,
     LifecycleController,
     UploadsController,
     SaasController,

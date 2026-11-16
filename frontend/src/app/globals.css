@@ -2275,3 +2275,23 @@ label {
     margin-bottom: 10px;
   }
 }
+
+.setup-checklist {
+  margin: 20px 0;
+}
+.setup-checklist progress {
+  width: 100%;
+  accent-color: #22644f;
+}
+.setup-checklist ul {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 12px;
+}
+.setup-checklist li span {
+  color: #22644f;
+  font-weight: bold;
+  margin-right: 6px;
+}
