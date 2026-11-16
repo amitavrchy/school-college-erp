@@ -276,7 +276,12 @@ export default function Shell({ children }: { children: ReactNode }) {
               <div className="workspace-label">{group}</div>
               <nav aria-label={group} className="nav-group">
                 {nav
-                  .filter((n) => n.group === group && can(...n.roles))
+                  .filter(
+                    (n) =>
+                      n.group === group &&
+                      can(...n.roles) &&
+                      (n.href !== '/website' || organization?.websiteEnabled),
+                  )
                   .map((n) => (
                     <Link
                       href={n.href}
@@ -384,7 +389,8 @@ export default function Shell({ children }: { children: ReactNode }) {
               new Date(organization.subscription.currentPeriodEnd) < new Date() && (
                 <div className="info-banner">
                   {new Date(organization.subscription.currentPeriodEnd).getTime() +
-                    user.subscriptionGraceDays * 86400000 > Date.now()
+                    user.subscriptionGraceDays * 86400000 >
+                  Date.now()
                     ? 'Your subscription is past due. Please renew before the grace period ends.'
                     : 'Your subscription has expired. Campus records remain available in read-only mode.'}{' '}
                   {billing ? (

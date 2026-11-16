@@ -302,6 +302,28 @@ export class PlatformController {
       return org;
     });
   }
+  @Patch('organizations/:id/website')
+  async websiteAccess(
+    @Actor() c: Context,
+    @Param('id') organizationId: string,
+    @Body() body: unknown,
+  ) {
+    const v = parse(z.object({ enabled: z.boolean() }), body);
+    return this.db.$transaction(async (tx) => {
+      const org = await tx.organization.update({
+        where: { id: organizationId },
+        data: { websiteEnabled: v.enabled },
+      });
+      await tx.subscriptionEvent.create({
+        data: {
+          organizationId,
+          actorId: c.userId,
+          action: v.enabled ? 'WEBSITE_ENABLED' : 'WEBSITE_DISABLED',
+        },
+      });
+      return org;
+    });
+  }
   @Patch('settings')
   settings(@Actor() c: Context, @Body() body: unknown) {
     const number = z

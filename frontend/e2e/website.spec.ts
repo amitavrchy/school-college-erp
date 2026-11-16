@@ -44,6 +44,14 @@ test('school CMS publishes a branded website, serves subdomains and exposes only
     });
     expect(registered.status()).toBe(201);
     const account = await registered.json();
+    await page.goto('/overview');
+    await expect(page.getByRole('link', { name: 'School website', exact: true })).toHaveCount(0);
+    await db.organization.update({
+      where: { id: account.organization.id },
+      data: { websiteEnabled: true },
+    });
+    await page.reload();
+    await expect(page.getByRole('link', { name: 'School website', exact: true })).toBeVisible();
     const transport = await page.request.get('/api/socket.io/?EIO=4&transport=polling');
     expect(transport.status()).toBe(200);
     expect(await transport.text()).toMatch(/^0\{/);

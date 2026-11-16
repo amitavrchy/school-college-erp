@@ -316,6 +316,7 @@ model Organization {
   status String @default("ACTIVE")
   supportEmail String?
   accentColor String @default("#22644f")
+  websiteEnabled Boolean @default(false)
   createdAt DateTime @default(now())
   members OrganizationMember[]
   subscription Subscription?

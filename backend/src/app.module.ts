@@ -39,7 +39,11 @@ import { SupportController } from './modules/support';
 import { HealthController } from './health';
 import { Websites } from './websites/service';
 import { WebsiteResults } from './websites/results';
-import { WebsiteController, PublicWebsitesController } from './websites/controllers';
+import {
+  WebsiteController,
+  PublicWebsitesController,
+  WebsiteEnabledGuard,
+} from './websites/controllers';
 @Module({
   imports: [
     JwtModule.register({
@@ -80,6 +84,7 @@ import { WebsiteController, PublicWebsitesController } from './websites/controll
   providers: [
     Db,
     Websites,
+    WebsiteEnabledGuard,
     WebsiteResults,
     Saas,
     Audit,
