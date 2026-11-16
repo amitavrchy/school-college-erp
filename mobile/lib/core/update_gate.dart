@@ -4,6 +4,8 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'providers.dart';
+import '../l10n/app_localizations.dart';
+import 'ui/spacing.dart';
 
 /// Compares numeric release versions; build metadata does not affect precedence.
 bool isBelowMinimum(String installed, String minimum) {
@@ -42,43 +44,42 @@ class UpdateGate extends ConsumerWidget {
     final config = ref.watch(appConfigProvider);
     final version = ref.watch(installedVersionProvider);
     if (config.isLoading || version.isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(
+        body: SafeArea(child: Center(child: CircularProgressIndicator())),
+      );
     }
     final minimum = config.value?['minimumVersion'];
     final current = version.value;
     if (minimum is String &&
         current != null &&
         isBelowMinimum(current, minimum)) {
-      final bn = Localizations.localeOf(context).languageCode == 'bn';
+      final t = AppLocalizations.of(context);
       return PopScope(
         canPop: false,
         child: Scaffold(
-          body: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    bn ? 'আপডেট প্রয়োজন' : 'Update required',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    bn
-                        ? 'চালিয়ে যেতে অ্যাপটি আপডেট করুন।'
-                        : 'Update the app to continue.',
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 20),
-                  FilledButton(
-                    onPressed: () => launchUrl(
-                      Uri.parse(storeUrl),
-                      mode: LaunchMode.externalApplication,
+          body: SafeArea(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      t.updateTitle,
+                      style: Theme.of(context).textTheme.headlineSmall,
                     ),
-                    child: Text(bn ? 'স্টোরে যান' : 'Open app store'),
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                    Text(t.updateRequired, textAlign: TextAlign.center),
+                    const SizedBox(height: 20),
+                    FilledButton(
+                      onPressed: () => launchUrl(
+                        Uri.parse(storeUrl),
+                        mode: LaunchMode.externalApplication,
+                      ),
+                      child: Text(t.openStore),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

@@ -107,7 +107,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String attendanceRate(int percent, int days) {
+  String attendanceRate(String percent, String days) {
     return '$percent% present (last $days school days)';
   }
 
@@ -209,4 +209,39 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get staffNotYet =>
       'Staff features are coming in the next release. Please use the web app for now.';
+
+  @override
+  String get updateTitle => 'Update required';
+
+  @override
+  String get openStore => 'Open app store';
+
+  @override
+  String get noInternet =>
+      'No internet connection. Check your connection and try again.';
+
+  @override
+  String get requestFailed =>
+      'The request could not be completed. Please try again.';
+
+  @override
+  String get unknownStatus => 'Unknown status';
+
+  @override
+  String get noAttendance => 'No attendance records yet';
+
+  @override
+  String get noInvoices => 'No invoices yet';
+
+  @override
+  String get noPayments => 'No payments yet';
+
+  @override
+  String get languageNameBn => 'বাংলা';
+
+  @override
+  String get languageNameEn => 'English';
+
+  @override
+  String get phoneExample => '01XXXXXXXXX';
 }

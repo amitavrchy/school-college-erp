@@ -4,6 +4,7 @@ import 'package:campus_one/core/school.dart';
 import 'package:campus_one/features/attendance/attendance_screen.dart';
 import 'package:campus_one/features/onboarding/language_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:campus_one/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -73,7 +74,13 @@ void main() {
 
   testWidgets('first launch offers Bangla and English', (tester) async {
     await tester.pumpWidget(
-      const ProviderScope(child: MaterialApp(home: LanguageScreen())),
+      const ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: LanguageScreen(),
+        ),
+      ),
     );
     expect(find.text('বাংলা'), findsOneWidget);
     expect(find.text('English'), findsOneWidget);

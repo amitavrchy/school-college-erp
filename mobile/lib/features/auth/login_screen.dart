@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
 import '../../core/school.dart';
+import '../../core/widgets.dart';
+import '../../core/ui/spacing.dart';
 import '../../l10n/app_localizations.dart';
 
 /// Guardians and students sign in with their mobile number and a one-time code; staff can switch
@@ -38,7 +40,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     try {
       await action();
     } catch (e) {
-      setState(() => _error = '$e');
+      if (mounted) setState(() => _error = localizedError(context, e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -57,38 +59,52 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           controller: _phone,
           keyboardType: TextInputType.phone,
           autofillHints: const [AutofillHints.telephoneNumber],
-          decoration: InputDecoration(labelText: t.mobileNumber, hintText: '01XXXXXXXXX'),
+          decoration: InputDecoration(
+            labelText: t.mobileNumber,
+            hintText: t.phoneExample,
+          ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.page),
         FilledButton(
           onPressed: _busy
               ? null
               : () => _run(() async {
-                    await _session.requestCode(_phone.text.trim());
-                    setState(() => _codeSent = true);
-                  }),
+                  await _session.requestCode(_phone.text.trim());
+                  setState(() => _codeSent = true);
+                }),
           child: Text(t.sendCode),
         ),
       ]);
     } else if (!_staff) {
       field.addAll([
         Text(t.codeSentTo(_phone.text.trim())),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.md),
         TextField(
           controller: _code,
           keyboardType: TextInputType.number,
           autofillHints: const [AutofillHints.oneTimeCode],
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(6)],
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(6),
+          ],
           decoration: InputDecoration(labelText: t.enterCode),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.page),
         FilledButton(
           onPressed: _busy
               ? null
-              : () => _run(() => _session.signInWithCode(_phone.text.trim(), _code.text.trim())),
+              : () => _run(
+                  () => _session.signInWithCode(
+                    _phone.text.trim(),
+                    _code.text.trim(),
+                  ),
+                ),
           child: Text(t.verify),
         ),
-        TextButton(onPressed: () => setState(() => _codeSent = false), child: Text(t.changeNumber)),
+        TextButton(
+          onPressed: () => setState(() => _codeSent = false),
+          child: Text(t.changeNumber),
+        ),
       ]);
     } else if (_challenge == null) {
       field.addAll([
@@ -98,22 +114,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           autofillHints: const [AutofillHints.email],
           decoration: InputDecoration(labelText: t.email),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.md),
         TextField(
           controller: _password,
           obscureText: true,
           autofillHints: const [AutofillHints.password],
           decoration: InputDecoration(labelText: t.password),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.page),
         FilledButton(
           onPressed: _busy
               ? null
               : () => _run(() async {
-                    final challenge =
-                        await _session.signInWithPassword(_email.text.trim(), _password.text);
-                    if (challenge != null) setState(() => _challenge = challenge);
-                  }),
+                  final challenge = await _session.signInWithPassword(
+                    _email.text.trim(),
+                    _password.text,
+                  );
+                  if (challenge != null) setState(() => _challenge = challenge);
+                }),
           child: Text(t.signIn),
         ),
       ]);
@@ -123,9 +141,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           controller: _code,
           decoration: InputDecoration(labelText: t.authCode),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.page),
         FilledButton(
-          onPressed: _busy ? null : () => _run(() => _session.signInWithMfa(_challenge!, _code.text.trim())),
+          onPressed: _busy
+              ? null
+              : () => _run(
+                  () => _session.signInWithMfa(_challenge!, _code.text.trim()),
+                ),
           child: Text(t.verify),
         ),
       ]);
@@ -133,27 +155,45 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return Scaffold(
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.all(24),
+          padding: AppSpacing.pagePadding,
           children: [
-            const SizedBox(height: 32),
+            const SizedBox(height: AppSpacing.xl),
             CircleAvatar(
               radius: 32,
               backgroundColor: School.accent,
               child: const Icon(Icons.school, color: Colors.white, size: 32),
             ),
-            const SizedBox(height: 16),
-            Text(School.displayName(locale), style: Theme.of(context).textTheme.headlineSmall),
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpacing.page),
+            Text(
+              School.displayName(locale),
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: AppSpacing.xs),
             Text(t.signInSubtitle),
-            const SizedBox(height: 24),
-            ...field,
-            if (_busy) const Padding(padding: EdgeInsets.only(top: 12), child: LinearProgressIndicator()),
+            const SizedBox(height: AppSpacing.lg),
+            ...field.map(
+              (widget) => widget is FilledButton
+                  ? SizedBox(
+                      width: double.infinity,
+                      height: AppSpacing.buttonHeight,
+                      child: widget,
+                    )
+                  : widget,
+            ),
+            if (_busy)
+              const Padding(
+                padding: EdgeInsets.only(top: 12),
+                child: LinearProgressIndicator(),
+              ),
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.only(top: 12),
-                child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                child: Text(
+                  _error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
               ),
-            const SizedBox(height: 24),
+            const SizedBox(height: AppSpacing.lg),
             TextButton(
               onPressed: () => setState(() {
                 _staff = !_staff;

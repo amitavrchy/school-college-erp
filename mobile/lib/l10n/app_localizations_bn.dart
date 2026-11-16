@@ -107,7 +107,7 @@ class AppLocalizationsBn extends AppLocalizations {
   }
 
   @override
-  String attendanceRate(int percent, int days) {
+  String attendanceRate(String percent, String days) {
     return '$percent% উপস্থিত (গত $days স্কুল দিবস)';
   }
 
@@ -209,4 +209,38 @@ class AppLocalizationsBn extends AppLocalizations {
   @override
   String get staffNotYet =>
       'শিক্ষক/কর্মীদের ফিচার পরের সংস্করণে আসছে। আপাতত ওয়েব অ্যাপ ব্যবহার করুন।';
+
+  @override
+  String get updateTitle => 'আপডেট প্রয়োজন';
+
+  @override
+  String get openStore => 'অ্যাপের দোকান খুলুন';
+
+  @override
+  String get noInternet =>
+      'ইন্টারনেট সংযোগ নেই। সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।';
+
+  @override
+  String get requestFailed => 'অনুরোধটি সম্পন্ন করা যায়নি। আবার চেষ্টা করুন।';
+
+  @override
+  String get unknownStatus => 'অজানা অবস্থা';
+
+  @override
+  String get noAttendance => 'এখনো উপস্থিতির তথ্য নেই';
+
+  @override
+  String get noInvoices => 'এখনো কোনো বিল নেই';
+
+  @override
+  String get noPayments => 'এখনো কোনো পরিশোধ নেই';
+
+  @override
+  String get languageNameBn => 'বাংলা';
+
+  @override
+  String get languageNameEn => 'English';
+
+  @override
+  String get phoneExample => '01XXXXXXXXX';
 }

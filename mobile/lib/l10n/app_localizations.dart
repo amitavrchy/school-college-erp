@@ -288,7 +288,7 @@ abstract class AppLocalizations {
   ///
   /// In en, this message translates to:
   /// **'{percent}% present (last {days} school days)'**
-  String attendanceRate(int percent, int days);
+  String attendanceRate(String percent, String days);
 
   /// No description provided for @noResults.
   ///
@@ -463,6 +463,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Staff features are coming in the next release. Please use the web app for now.'**
   String get staffNotYet;
+
+  /// No description provided for @updateTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Update required'**
+  String get updateTitle;
+
+  /// No description provided for @openStore.
+  ///
+  /// In en, this message translates to:
+  /// **'Open app store'**
+  String get openStore;
+
+  /// No description provided for @noInternet.
+  ///
+  /// In en, this message translates to:
+  /// **'No internet connection. Check your connection and try again.'**
+  String get noInternet;
+
+  /// No description provided for @requestFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The request could not be completed. Please try again.'**
+  String get requestFailed;
+
+  /// No description provided for @unknownStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown status'**
+  String get unknownStatus;
+
+  /// No description provided for @noAttendance.
+  ///
+  /// In en, this message translates to:
+  /// **'No attendance records yet'**
+  String get noAttendance;
+
+  /// No description provided for @noInvoices.
+  ///
+  /// In en, this message translates to:
+  /// **'No invoices yet'**
+  String get noInvoices;
+
+  /// No description provided for @noPayments.
+  ///
+  /// In en, this message translates to:
+  /// **'No payments yet'**
+  String get noPayments;
+
+  /// No description provided for @languageNameBn.
+  ///
+  /// In en, this message translates to:
+  /// **'বাংলা'**
+  String get languageNameBn;
+
+  /// No description provided for @languageNameEn.
+  ///
+  /// In en, this message translates to:
+  /// **'English'**
+  String get languageNameEn;
+
+  /// No description provided for @phoneExample.
+  ///
+  /// In en, this message translates to:
+  /// **'01XXXXXXXXX'**
+  String get phoneExample;
 }
 
 class _AppLocalizationsDelegate
