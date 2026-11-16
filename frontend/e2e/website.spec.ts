@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
 import { removeTestTenant } from '../../backend/test/tenant-cleanup';
@@ -12,7 +12,8 @@ test('school CMS publishes a branded website, serves subdomains and exposes only
   test.setTimeout(180000);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   page.setDefaultTimeout(15000);
-  const env = readFileSync(resolve(__dirname, '../../backend/.env'), 'utf8');
+  const envPath = resolve(__dirname, '../../backend/.env');
+  const env = existsSync(envPath) ? readFileSync(envPath, 'utf8') : '';
   const url =
     process.env.DATABASE_URL ||
     env

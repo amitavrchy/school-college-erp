@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { removeTestTenant } from '../../backend/test/tenant-cleanup';
 
@@ -85,7 +85,8 @@ test('institution signup, wallet review and subscription receipt work end to end
   browser,
 }) => {
   test.setTimeout(120000);
-  const env = readFileSync(resolve(__dirname, '../../backend/.env'), 'utf8');
+  const envPath = resolve(__dirname, '../../backend/.env');
+  const env = existsSync(envPath) ? readFileSync(envPath, 'utf8') : '';
   const databaseUrl =
     process.env.DATABASE_URL ||
     env
