@@ -71,8 +71,10 @@ const sections = [
 ];
 export default function WebsiteEditor() {
   const { can, organization } = useCampus(),
-    allowed = can('SUPER_ADMIN', 'CAMPUS_ADMIN', 'PRINCIPAL');
-  const { data, loading, error, reload } = useData(allowed ? 'website' : null);
+    allowed = can('SUPER_ADMIN', 'CAMPUS_ADMIN', 'PRINCIPAL'),
+    // The platform switches the website module on per institution; without it the API answers 404.
+    enabled = !!organization?.websiteEnabled;
+  const { data, loading, error, reload } = useData(allowed && enabled ? 'website' : null);
   const { data: inquiries, reload: reloadInquiries } = useData(
     data?.site ? 'website/inquiries' : null,
   );
@@ -171,6 +173,10 @@ export default function WebsiteEditor() {
   }
   if (!allowed)
     return <State error="Website editing requires an institution administrator or principal." />;
+  if (organization && !enabled)
+    return (
+      <State error="The school website module is not switched on for your institution yet. Contact the Campus One team to enable it; your other modules are unaffected." />
+    );
   if (!data) return <State loading={loading} error={error} onRetry={reload} />;
   if (data.site && data.site.organizationId !== organization?.id) return <State loading />;
   return (

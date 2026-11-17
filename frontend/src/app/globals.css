@@ -1404,11 +1404,49 @@ label {
   .grid-two {
     grid-template-columns: 1fr;
   }
+  /* Tablet (741–960px): the sidebar stays open, so the top bar must shrink instead of
+     pushing the page wider than the viewport. */
+  .topbar {
+    min-width: 0;
+    padding: 0 20px;
+    gap: 10px;
+  }
+  .topbar-left,
+  .topbar-right {
+    min-width: 0;
+  }
   .topbar-right {
     gap: 7px;
+    flex-shrink: 1;
+  }
+  .topbar-right > svg,
+  .topbar-right > .icon-button,
+  .topbar-right > .locale-switch {
+    flex-shrink: 0;
+  }
+  .campus-select {
+    min-width: 0;
+    max-width: 150px;
+    text-overflow: ellipsis;
+  }
+  .session-chip {
+    max-width: 140px;
+  }
+  .topbar .avatar {
+    display: none;
   }
   .breadcrumb {
     gap: 7px;
+    min-width: 0;
+  }
+  .breadcrumb strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .main-area,
+  .content {
+    min-width: 0;
   }
   .login-story {
     padding: 30px;

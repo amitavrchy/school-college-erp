@@ -6,9 +6,12 @@ Every push to `main` (or a manual *Run workflow*) runs `.github/workflows/deploy
    Buildx + GHA cache and pushes `ghcr.io/amitavrchy/erp-backend` and `ghcr.io/amitavrchy/erp-frontend`
    tagged `latest` and the commit SHA.
 2. SSHes to the server (`EC2_HOST`, `EC2_USER`, `EC2_SSH_KEY` secrets), copies
-   `deploy/docker-compose.prod.yml` to `/opt/apps/erp/docker-compose.yml`, logs in to GHCR with the
-   workflow token, pulls (with retries), runs `npx prisma migrate deploy` in a one-off backend
-   container, `docker compose up -d`, then `docker image prune -f`.
+   `deploy/docker-compose.prod.yml` to `/opt/apps/erp/docker-compose.yml` and `deploy/scripts/*.sh`
+   to `/opt/apps/erp/scripts/`, logs in to GHCR with the workflow token and runs `scripts/release.sh`:
+   encrypted pre-release backup → pull (with retries) → `npx prisma migrate deploy` in a one-off
+   backend container → `docker compose up -d` → health check of `/api/health` and the frontend →
+   on failure the application containers roll back to the previously deployed tag (migrations are
+   not reversed; keep them backward compatible), then `docker image prune -f`.
 
 | Service  | Container      | Host port        | Public URL                                   |
 |----------|----------------|------------------|----------------------------------------------|
@@ -48,6 +51,21 @@ Deploys now run only after the `CI` workflow passes on `main` (typecheck, unit, 
   that have not saved a policy.
 - The migration suffixes duplicate roll numbers within a section (e.g. `12-2`) before adding a
   uniqueness rule, and backfills `TimetableSlot.sessionId` from each slot's section.
+
+## Backups and restore drill
+
+`scripts/backup.sh [label]` writes an AES-256 encrypted `pg_dump` to `/opt/apps/erp/backups/` and,
+when `BACKUP_S3_URI` is set, copies it off the host. Set `BACKUP_PASSPHRASE` in `.env` and keep a
+copy of the passphrase **and** `DOCUMENT_ENCRYPTION_KEY` outside the server; without them the dump
+and the encrypted admission documents are unreadable. Schedule it nightly:
+
+```
+45 2 * * * cd /opt/apps/erp && ./scripts/backup.sh nightly >> backups/backup.log 2>&1
+```
+
+`scripts/restore-drill.sh backups/<file>` restores a dump into a throwaway Postgres container and
+counts core tables. Run it after the first production backup and at least monthly; record the
+result. Redis (Valkey) holds only queued jobs; after a restore, reconcile queued SMS/notices.
 
 ## First admin
 
