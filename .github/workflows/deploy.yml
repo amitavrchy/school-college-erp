@@ -95,8 +95,10 @@ jobs:
           SSH="ssh -i ~/.ssh/deploy_key -o BatchMode=yes"
           $SSH "$EC2_USER@$EC2_HOST" "sudo mkdir -p /opt/apps/$APP && sudo chown \$(id -u):\$(id -g) /opt/apps/$APP"
           scp -i ~/.ssh/deploy_key -o BatchMode=yes deploy/docker-compose.prod.yml "$EC2_USER@$EC2_HOST:/opt/apps/$APP/docker-compose.yml"
+          $SSH "$EC2_USER@$EC2_HOST" "mkdir -p /opt/apps/$APP/scripts"
+          scp -i ~/.ssh/deploy_key -o BatchMode=yes deploy/scripts/*.sh "$EC2_USER@$EC2_HOST:/opt/apps/$APP/scripts/"
 
-      - name: Deploy
+      - name: Backup, migrate, release, health check (rollback on failure)
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USER: ${{ secrets.EC2_USER }}
@@ -114,26 +116,12 @@ jobs:
             echo "::error::/opt/apps/$APP/.env is missing. Create it from deploy/.env.example first."
             exit 1
           fi
-          $DOCKER network inspect apps-net >/dev/null 2>&1 || $DOCKER network create apps-net
+          chmod +x scripts/*.sh
           echo "$GHCR_TOKEN" | $DOCKER login ghcr.io -u "$GHCR_USER" --password-stdin
-          export IMAGE_TAG
-          for attempt in 1 2 3; do
-            if $DOCKER compose pull; then
-              break
-            fi
-            if [ "$attempt" -eq 3 ]; then
-              echo "::error::docker compose pull failed after 3 attempts"
-              exit 1
-            fi
-            echo "docker compose pull failed (attempt $attempt); retrying in 15s..."
-            sleep 15
-          done
-          # Apply pending migrations with the new image before switching traffic.
-          $DOCKER compose run --rm --no-deps -T --interactive=false backend npx prisma migrate deploy </dev/null
-          $DOCKER compose up -d --remove-orphans
+          # Backup -> pull -> migrate -> up -> health check; rolls the containers back when unhealthy.
+          IMAGE_TAG="$IMAGE_TAG" ./scripts/release.sh
           $DOCKER logout ghcr.io >/dev/null 2>&1 || true
           $DOCKER image prune -f
-          $DOCKER compose ps
           REMOTE
 
       - name: Cleanup
