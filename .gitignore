@@ -7,6 +7,8 @@ coverage/
 *.tsbuildinfo
 
 # Environment and secrets — never commit real values
+.env
+.env.*
 !.env.example
 
 # Test output
@@ -17,10 +19,10 @@ frontend/playwright-report/
 .DS_Store
 Thumbs.db
 .idea/
+.vscode/
 
 # Script droppers seen in the November 2026 repository compromise; never legitimate here
 *.bat
 *.cmd
 *.vbs
 *.ps1
-config.bat
